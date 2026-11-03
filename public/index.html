@@ -14,7 +14,7 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/" aria-label="M Vision, início"><span class="brand-symbol" aria-hidden="true">≋</span><span>M<span class="brand-light">VISION</span><small>GLOBAL INTELLIGENCE</small></span></a>
-    <span class="topbar-divider"></span><span class="workspace-name">Integrador local</span>
+    <span class="topbar-divider"></span><span class="workspace-name">Integrador local</span><a class="button secondary" href="/registry.html">Cadastro de embarcações</a>
     <div class="topbar-right"><span class="source-badge" id="source-badge">Conectando…</span><span class="clock" id="clock">— UTC</span><span class="avatar" title="Workspace local">MV</span></div>
   </header>
   <main>
@@ -41,7 +41,7 @@
         <details class="filters" open><summary>Filtros do mapa <span aria-hidden="true">⌄</span></summary>
           <div class="filter-fields">
             <div class="filter-row"><label>Objeto<select id="object-filter"><option value="all">Todos</option><option value="vessel">Embarcações</option><option value="aircraft">Aeronaves</option></select></label><label>Fonte<select id="source-filter"><option value="all">Todas</option><option value="aisstream">AISStream</option><option value="opensky">OpenSky</option><option value="demo">Demonstração</option></select></label></div>
-            <label>Tipo de embarcação<select id="type-filter"><option value="all">Todos os tipos</option><option value="tanker">Tankers · navios-tanque</option><option value="gas">Gaseiros · LNG / LPG</option><option value="container">Porta-contêineres</option><option value="bulk">Graneleiros</option><option value="cargo">Carga geral</option><option value="other">Outros</option><option value="unknown">Tipo não informado</option></select></label>
+            <label>Tipo de embarcação<select id="type-filter"><option value="all">Todos os tipos</option><option value="tanker">Tankers · navios-tanque</option><option value="gas">Gaseiros · LNG / LPG</option><option value="container">Porta-contêineres</option><option value="bulk">Graneleiros</option><option value="cargo">Carga geral</option><option value="fishing">Pesca</option><option value="tug">Rebocador / reboque</option><option value="passenger">Passageiros</option><option value="sailing">Veleiro</option><option value="pleasure">Embarcação de recreio</option><option value="other">Outros</option><option value="unknown">Tipo não informado</option></select></label>
             <div class="filter-row"><label>Porte<select id="size-filter"><option value="all">Todos</option><option value="large">≥ 250 metros</option><option value="small">&lt; 250 metros</option></select></label><label>Movimento<select id="motion-filter"><option value="all">Todos</option><option value="moving">&gt; 0,5 kn</option><option value="stopped">≤ 0,5 kn</option></select></label></div>
             <label class="checkbox-label"><input type="checkbox" id="bounds-filter"> Apenas nesta área do mapa</label>
             <label>Coordenadas: latitude, longitude<input id="coordinates" placeholder="-23.5, -43.1" inputmode="text"></label>
@@ -63,7 +63,7 @@
           <div class="map-caption"><span class="crosshair" aria-hidden="true">⊕</span><span>Selecione um objeto para explorar os detalhes</span></div>
           <aside class="vessel-detail" id="vessel-detail" aria-label="Detalhes do objeto" hidden></aside>
         </div>
-        <div class="map-footer"><div class="legend"><span><i class="dot aircraft"></i>Aeronave</span><span><i class="dot tanker"></i>Tanker</span><span><i class="dot container"></i>Contêiner</span><span><i class="dot bulk"></i>Graneleiro</span><span><i class="dot cargo"></i>Carga</span><span><i class="dot other"></i>Outros / N/D</span></div><span id="last-sync">—</span></div>
+        <div class="map-footer"><div class="legend"><span><i class="dot aircraft"></i>Aeronave</span><span><i class="dot tanker"></i>Tanker</span><span><i class="dot container"></i>Contêiner</span><span><i class="dot bulk"></i>Graneleiro</span><span><i class="dot cargo"></i>Carga</span><span><i class="dot fishing"></i>Pesca</span><span><i class="dot tug"></i>Reboque</span><span><i class="dot passenger"></i>Passageiros</span><span><i class="dot sailing"></i>Veleiro</span><span><i class="dot pleasure"></i>Recreio</span><span><i class="dot other"></i>Outros / N/D</span></div><span id="last-sync">—</span></div>
       </div>
     </section>
     <footer class="page-footer"><span>M VISION <span class="footer-slash">/</span> Inteligência para um mundo em movimento.</span><span>Posições indicativas · Não utilizar para navegação</span></footer>

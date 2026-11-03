@@ -11,6 +11,7 @@ import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from mvision.registry import VesselRegistry
 
 UTC = timezone.utc
 FIELDS = ["record_id", "raw_id", "object_id", "object_type", "source", "name", "mmsi", "icao24",
@@ -90,6 +91,10 @@ class VesselStore:
         for row in self.db.execute("SELECT payload FROM latest_state"):
             item = json.loads(row[0])
             self.vessels[(item["source"], item["object_id"])] = item
+        self.registry = VesselRegistry(self.db, self.lock)
+        with self.db:
+            for item in self.vessels.values():
+                self.registry.sync(item)
         self._materialize()
         # Import the previous last-position database without inventing raw API responses.
         has_legacy = self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='vessels'").fetchone()
@@ -157,6 +162,7 @@ class VesselStore:
                         self.db.execute("INSERT INTO outbox(path, body) VALUES (?, ?)",
                                         (f"brutos/{source}/{day}.jsonl", raw_body + "\n"))
                         for record in records:
+                            self.registry.sync(record)
                             payload = json.dumps(record, ensure_ascii=False, allow_nan=False)
                             self.db.execute("""INSERT INTO observations
                                 (id, raw_id, source, object_id, collected_at, position_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?)""",

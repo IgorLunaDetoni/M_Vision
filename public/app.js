@@ -1,8 +1,8 @@
 ﻿/* Provider credentials stay on the local server. Downloads use server-side filters. */
 "use strict";
 const $ = id => document.getElementById(id);
-const TYPES = {aircraft:"Aeronave",tanker:"Tanker · navio-tanque",gas:"Gaseiro · LNG / LPG",container:"Porta-contêineres",bulk:"Graneleiro",cargo:"Carga geral",other:"Outros",unknown:"Não informado"};
-const COLORS = {aircraft:"#3486d9",tanker:"#e09b3b",gas:"#25a39b",container:"#4585cf",bulk:"#a477c5",cargo:"#638878",other:"#80929d",unknown:"#80929d"};
+const TYPES = {aircraft:"Aeronave",tanker:"Tanker · navio-tanque",gas:"Gaseiro · LNG / LPG",container:"Porta-contêineres",bulk:"Graneleiro",cargo:"Carga geral",fishing:"Pesca",tug:"Rebocador / reboque",passenger:"Passageiros",sailing:"Veleiro",pleasure:"Embarcação de recreio",other:"Outros",unknown:"Não informado"};
+const COLORS = {aircraft:"#3486d9",tanker:"#e09b3b",gas:"#25a39b",container:"#4585cf",bulk:"#a477c5",cargo:"#638878",fishing:"#16806a",tug:"#b55a38",passenger:"#9254a5",sailing:"#277b96",pleasure:"#c04f83",other:"#80929d",unknown:"#80929d"};
 const state = {objects:[],selected:null,favorites:new Set(),favoritesOnly:false,markers:new Map(),source:"demo",at:null,area:null,drawing:false,corner:null,total:0};
 let map, areaLayer, trackLayer, toastTimer, queryTimer, request, generation=0, trajectoryGeneration=0, hasLoaded=false;
 const key = object => `${object.source}:${object.object_id}`;

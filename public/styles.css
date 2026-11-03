@@ -15,3 +15,6 @@ main{max-width:1920px;margin:auto;padding:30px 34px 0}.page-heading{display:flex
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 .ship-marker.aircraft .ship-pointer{width:23px;height:27px;left:0;top:0}.heading-actions{align-items:flex-end}.filter-fields>label:not(.checkbox-label){margin-top:10px}.filter-fields>.button{width:100%;margin-top:8px}.time-controls label input{max-width:100%}.topbar .source-badge{max-width:340px;white-space:normal;line-height:1.5}.detail-status{gap:8px}.detail-status small{text-align:right}.detail-info dl{grid-template-columns:105px 1fr}.page-heading>div:first-child{min-width:250px}.heading-actions{flex-shrink:0}
 @media(max-width:1180px){.page-heading{flex-wrap:wrap}.heading-actions{flex-shrink:1}}
+
+.dot.fishing{background:#16806a}.dot.tug{background:#b55a38}.dot.passenger{background:#9254a5}.dot.sailing{background:#277b96}.dot.pleasure{background:#c04f83}
+.legend{flex-wrap:wrap}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadastro de embarcações · M Vision</title>
+  <link rel="stylesheet" href="/registry.css">
+  <script src="/registry.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><div><a href="/">← Voltar ao mapa</a><h1>Cadastro de embarcações</h1></div><button id="refresh">Atualizar tabela</button></header>
+    <p>Cadastro local das embarcações reais identificadas. Dados AIS e informações complementares permanecem separados. Atualização da tabela a cada 50 segundos.</p>
+    <p>O coletor consulta o Wikidata por IMO ou MMSI. Campos ausentes permanecem sem informação. Classe/projeto não confirma modelo comercial.</p>
+    <form id="filters">
+      <label>Buscar nome, MMSI, IMO ou modelo<input id="query" type="search" placeholder="Identificador ou informação"></label>
+      <label>Tipo<select id="type"><option value="">Todos os tipos</option><option value="cargo">Carga</option><option value="tanker">Navio-tanque</option><option value="fishing">Pesca</option><option value="tug">Rebocador / reboque</option><option value="passenger">Passageiros</option><option value="sailing">Veleiro</option><option value="pleasure">Recreio</option><option value="other">Outros</option><option value="unknown">Não informado</option></select></label>
+      <label>Consulta complementar<select id="status"><option value="">Todos os resultados</option><option value="pending">Pendente</option><option value="running">Consultando</option><option value="matched">Encontrado</option><option value="not_found">Não encontrado</option><option value="ambiguous">Correspondência ambígua</option><option value="error">Falha / nova tentativa</option></select></label>
+      <button>Buscar</button>
+    </form>
+    <p id="summary" role="status">Carregando cadastro…</p>
+    <div class="table-wrap"><table><thead><tr><th>Embarcação / identificadores</th><th>Tipo AIS</th><th>Modelo comercial</th><th>Fabricante / estaleiro</th><th>Classe / projeto</th><th>Informações AIS</th><th>Dados complementares / fonte</th><th>Consulta</th><th>Ações</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <nav><button id="previous">Anterior</button><span id="page"></span><button id="next">Próxima</button></nav>
+    <dialog id="editor">
+      <form id="edit-form">
+        <h2 id="edit-title">Editar cadastro</h2>
+        <p>Preenchimento manual. O coletor preserva estes valores; deixe vazio para usar o dado público disponível.</p>
+        <label>Modelo comercial<input id="model" maxlength="2000"></label>
+        <label>Fabricante / estaleiro<input id="manufacturer" maxlength="2000"></label>
+        <label>Classe / projeto<input id="vessel_class" maxlength="2000"></label>
+        <label>Fonte da informação<input id="source_url" type="url" maxlength="2000" placeholder="https://..."></label>
+        <label>Observações<textarea id="notes" maxlength="2000"></textarea></label>
+        <p id="edit-status" role="status"></p>
+        <div><button type="button" id="cancel">Cancelar</button><button id="save">Salvar cadastro</button></div>
+      </form>
+    </dialog>
+  </main>
+</body>
+</html>

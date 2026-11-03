@@ -17,6 +17,7 @@ from mvision.ais import collect, parse_boxes
 from mvision.aircraft import OpenSkyClient, collect_aircraft
 from mvision.demo import demo_aircraft, demo_vessels
 from mvision.exports import export_data
+from mvision.enrichment import collect_particulars
 from mvision.store import VesselStore, instant, stamp
 
 ROOT = Path(__file__).resolve().parent
@@ -78,6 +79,25 @@ def create_server(port=8000, source="demo", store=None, interval=300):
         def do_HEAD(self):
             self.do_GET()
 
+        def do_POST(self):
+            if self.path != '/api/registry':
+                return self.respond(b'{"error":"Not found"}', 404)
+            origin = self.headers.get('Origin')
+            allowed = {f'http://127.0.0.1:{self.server.server_port}', f'http://localhost:{self.server.server_port}'}
+            if (origin and origin not in allowed) or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
+                return self.respond(b'{"error":"Forbidden"}', 403)
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 16000:
+                    raise ValueError('Tamanho inválido.')
+                body = json.loads(self.rfile.read(length))
+                store.registry.edit(body['mmsi'], body['fields'])
+                return self.respond(b'{"saved":true}')
+            except (ValueError, TypeError, KeyError):
+                return self.respond(json.dumps({'error': 'Cadastro inválido. Revise os campos.'}).encode(), 400)
+            except (OSError, sqlite3.Error):
+                return self.respond(b'{"error":"Storage unavailable"}', 503)
+
         def do_GET(self):
             url = urlsplit(self.path)
             path = unquote(url.path)
@@ -99,6 +119,15 @@ def create_server(port=8000, source="demo", store=None, interval=300):
             first = lambda key, default=None: params.get(key, [default])[0]
             filters = query_filters(params)
             at = first("at")
+            if path == '/api/registry':
+                limit, offset = int(first('limit', '100')), int(first('offset', '0'))
+                if not 1 <= limit <= 500 or offset < 0:
+                    raise ValueError('Paginação inválida.')
+                with store.lock:
+                    store.flush()
+                    rows, total = store.registry.list(first('q', ''), first('type', ''), first('status', ''), limit, offset)
+                return self.respond(json.dumps({'vessels': rows, 'total': total, 'limit': limit, 'offset': offset},
+                                               ensure_ascii=False).encode())
             if path in ("/api/objects", "/api/vessels"):
                 if path == "/api/vessels":
                     filters["object_type"] = "vessel"
@@ -214,6 +243,8 @@ def main():
     if aircraft_source == "opensky":
         client = OpenSkyClient(os.environ["OPENSKY_CLIENT_ID"], os.environ["OPENSKY_CLIENT_SECRET"])
         workers.append(threading.Thread(target=collect_aircraft, args=(store, client, stop, interval), daemon=True))
+    if source == 'aisstream' and os.getenv('VESSEL_ENRICHMENT_ENABLED', 'true').lower() == 'true':
+        workers.append(threading.Thread(target=collect_particulars, args=(store.registry, stop), daemon=True))
 
     def persist():
         next_archive = 0

@@ -68,6 +68,36 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(vessel_type(79), "cargo")
         self.assertEqual(vessel_type(0), "unknown")
 
+    def test_detailed_vessel_types(self):
+        for code, expected in ((30, "fishing"), (31, "tug"), (32, "tug"), (52, "tug"),
+                               (36, "sailing"), (37, "pleasure"), (60, "passenger"),
+                               (69, "passenger"), (50, "other"), (True, "unknown"),
+                               (-1, "unknown"), (100, "unknown")):
+            with self.subTest(code=code):
+                self.assertEqual(vessel_type(code), expected)
+
+    def test_class_b_static_parts(self):
+        packet = {"MessageType": "StaticDataReport", "MetaData": {"MMSI": 123456789},
+                  "Message": {"StaticDataReport": {
+                      "PartNumber": False, "ReportA": {"Valid": True, "Name": "SAIL BOAT@@"},
+                      "ReportB": {"Valid": True, "ShipType": 0}}}}
+        first = normalize(packet)
+        self.assertEqual(first["name"], "SAIL BOAT")
+        self.assertNotIn("type", first)
+        payload = packet["Message"]["StaticDataReport"]
+        payload.update(PartNumber=True, ReportB={"Valid": True, "ShipType": 36,
+                       "CallSign": "TEST@@", "Dimension": {"A": 8, "B": 4, "C": 2, "D": 2}})
+        second = normalize(packet)
+        self.assertEqual(second["type"], "sailing")
+        self.assertEqual(second["length"], 12)
+        self.assertEqual(second["callsign"], "TEST")
+        self.assertNotIn("updated_at", second)
+        self.assertNotIn("latitude", second)
+        payload["ReportB"]["Valid"] = False
+        self.assertIsNone(normalize(packet))
+        payload["ReportB"] = []
+        self.assertIsNone(normalize(packet))
+
     def test_malformed_and_control_packets(self):
         for message in (None, [], {}, {"error": "denied"}, {"MessageType": "SubscriptionConfirmation"},
                         {"MessageType": "PositionReport", "Message": []}):
@@ -108,6 +138,17 @@ class PersistenceTests(unittest.TestCase):
         self.store.close()
         self.store = VesselStore(self.path)
         self.assertEqual(self.store.snapshot()[1], 1)
+
+    def test_new_type_filters_after_static_update(self):
+        for code, category in ((30, "fishing"), (52, "tug"), (60, "passenger"),
+                               (36, "sailing"), (37, "pleasure")):
+            with self.subTest(category=category):
+                self.store.upsert(normalize(position()))
+                self.store.upsert(normalize(static(Type=code)))
+                rows, total = self.store.snapshot(filters={"type": category})
+                self.assertEqual(total, 1)
+                self.assertEqual(rows[0]["type"], category)
+                self.assertEqual(self.store.snapshot(filters={"type": "cargo"})[1], 0)
 
     def test_static_packets_do_not_rejuvenate_old_positions(self):
         old = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()

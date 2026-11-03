@@ -6,7 +6,7 @@ import random
 from mvision.store import stamp
 
 POSITIONS = {"PositionReport", "StandardClassBPositionReport", "ExtendedClassBPositionReport"}
-MESSAGE_TYPES = sorted(POSITIONS | {"ShipStaticData"})
+MESSAGE_TYPES = sorted(POSITIONS | {"ShipStaticData", "StaticDataReport"})
 DEFAULT_BOUNDING_BOXES = (((-40, -80), (10, -25)),)
 STATUSES = {0: "Em navegação", 1: "Fundeado", 2: "Sem governo", 3: "Manobra restrita",
             4: "Restrito pelo calado", 5: "Atracado", 6: "Encalhado", 7: "Em pesca",
@@ -25,8 +25,18 @@ def text(value):
 
 def vessel_type(code):
     # AIS cargo codes do not distinguish bulk/container or LNG/oil tankers.
-    if not isinstance(code, int):
+    if isinstance(code, bool) or not isinstance(code, int) or not 0 <= code <= 99:
         return "unknown"
+    if code == 30:
+        return "fishing"
+    if code in (31, 32, 52):
+        return "tug"
+    if code == 36:
+        return "sailing"
+    if code == 37:
+        return "pleasure"
+    if 60 <= code <= 69:
+        return "passenger"
     if 80 <= code <= 89:
         return "tanker"
     if 70 <= code <= 79:
@@ -53,6 +63,17 @@ def normalize(message, received_at=None):
         return None
     now = stamp(received_at)
     update = {"mmsi": mmsi, "object_id": mmsi, "object_type": "vessel", "source": "aisstream"}
+    if kind == "StaticDataReport":
+        # Message 24 sends name (A) and vessel type/dimensions (B) separately.
+        part = payload.get("PartNumber")
+        if not isinstance(part, (bool, int)) or part not in (0, 1):
+            return None
+        report = payload.get("ReportB" if part else "ReportA")
+        if not isinstance(report, dict) or report.get("Valid") is False:
+            return None
+        payload = dict(report)
+        if part and "ShipType" in report:
+            payload["Type"] = report["ShipType"]
     name = text(payload.get("Name")) or text(metadata.get("ShipName"))
     if name:
         update["name"] = name
@@ -77,7 +98,7 @@ def normalize(message, received_at=None):
                       heading=number(payload.get("TrueHeading"), 0, 360, False))
         if "NavigationalStatus" in payload:
             update["status"] = STATUSES.get(payload["NavigationalStatus"], "Não informado")
-    if kind == "ShipStaticData" or kind == "ExtendedClassBPositionReport":
+    if kind in {"ShipStaticData", "ExtendedClassBPositionReport", "StaticDataReport"}:
         if "Type" in payload:
             update["type"] = vessel_type(payload["Type"])
         dimensions = payload.get("Dimension") or {}

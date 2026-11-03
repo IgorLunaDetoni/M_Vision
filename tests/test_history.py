@@ -245,7 +245,7 @@ class IntegrationTests(unittest.TestCase):
         with self.get("/api/objects") as response:
             data = json.load(response)
         self.assertEqual(data["total"], 42)
-        self.assertEqual(data["refresh_seconds"], 300)
+        self.assertEqual(data["refresh_seconds"], 50)
         with self.get("/api/objects", object_type="aircraft") as response:
             data = json.load(response)
         self.assertEqual(data["total"], 6)

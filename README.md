@@ -61,6 +61,8 @@ Respostas de aeronaves podem conter vários objetos. Na exportação bruta filtr
 
 ## Conectar embarcações: AISStream
 
+O filtro **Tipo de embarcação** inclui pesca (AIS 30), rebocador/reboque (31, 32 e 52), passageiros (60–69), veleiro (36) e recreio (37), além de carga e navios-tanque. A classificação aparece na lista, na ficha e nas cores do mapa; os filtros também se aplicam às exportações. Ela depende do tipo transmitido pela embarcação, sem inferência pelo nome. Mensagens `StaticDataReport` classe B complementam nome, tipo, indicativo e dimensões, associadas pelo MMSI. Embarcações já armazenadas serão classificadas conforme novas mensagens estáticas chegarem; o histórico anterior é preservado.
+
 Com as dependências instaladas, execute `.\start-aisstream.ps1` para iniciar a fonte real. O iniciador solicita a chave com entrada oculta, sem gravá-la em arquivo. Crie sua chave na conta do [AISStream](https://aisstream.io/); conectar o Git no VS Code não configura essa credencial. Acesse `http://127.0.0.1:8000` após iniciar.
 
 O adaptador está implementado, mas precisa de uma chave própria. Consulte a [documentação oficial](https://aisstream.io/documentation) para acesso, cobertura e limites. As condições de armazenamento e exportação devem ser confirmadas com o fornecedor. Nenhuma conta real foi conectada para validar esta entrega.
@@ -108,6 +110,27 @@ $env:AIRCRAFT_SOURCE = 'disabled'
 `COLLECTION_INTERVAL_SECONDS` aceita valores a partir de 300 para a coleta OpenSky. O mapa consulta a cada 50 segundos. Para outra porta, defina `$env:PORT = '8001'` antes de iniciar.
 
 ## APIs locais e limites
+
+### Cadastro local e coleta de informações complementares
+
+Abra **Cadastro de embarcações** no topo do mapa, ou `/registry.html`. A tabela inclui nome, MMSI, IMO, tipo AIS, indicativo, dimensões, destino, modelo comercial, fabricante/estaleiro, classe/projeto, país de registro informado pelo Wikidata, observações e fontes. Há busca, filtros por tipo/resultado da consulta e páginas de 100 registros. A tela atualiza a cada 50 segundos. O botão **Editar** permite adicionar modelo e informações verificadas, com URL da fonte; valores manuais têm prioridade de exibição e são preservados pelo coletor.
+
+O cadastro fica na tabela SQLite `vessel_registry`, dentro de `data/vessels.sqlite3`, e não é apagado pelo arquivamento da telemetria após 30 dias. A inicialização importa as embarcações AIS reais já existentes no índice; novas mensagens alimentam o cadastro em lotes junto à persistência da telemetria. Dados de demonstração e aeronaves não entram no cadastro. Alterações de IMO invalidam resultados externos; quando um IMO conhecido muda, informações manuais anteriores são guardadas no histórico interno de identidade para não serem atribuídas à nova identidade.
+
+Ao iniciar com `VESSEL_SOURCE=aisstream`, o coletor complementar consulta o [serviço público do Wikidata](https://www.wikidata.org/wiki/Wikidata:Data_access) em segundo plano, por IMO exato ou, na ausência dele, por MMSI exato. Consulta no máximo uma embarcação por vez, com intervalo mínimo de 10 segundos. Registra encontrado, não encontrado, ambíguo ou erro, além da data e URL de origem. Resultados são consultados novamente após 30 dias; falhas têm espera para nova tentativa e limites HTTP recebem espera global. Reservas interrompidas são retomadas após 5 minutos. `VESSEL_ENRICHMENT_ENABLED=false` desabilita a coleta complementar.
+
+A cobertura do Wikidata é limitada, especialmente para barcos menores. O coletor preenche fabricante, classe/projeto e país quando disponíveis; **modelo comercial permanece vazio até haver confirmação manual**, pois a classe naval não equivale ao modelo. Não há busca aproximada pelo nome nem raspagem de sites comerciais. O cadastro atual não altera consultas históricas de posição.
+
+Para executar um lote manual, respeitando a fila e os intervalos:
+
+```powershell
+.\data\runtime\Scripts\python.exe -m mvision.enrichment --limit 10
+```
+
+Se usar seu próprio ambiente, substitua o executável pelo Python correspondente. O argumento `--database` permite escolher outro índice SQLite. O cadastro precisa ter sido criado pela inicialização do aplicativo. Falhas de rede/certificado aparecem na coluna de consulta e não interrompem a coleta AIS; a validação HTTPS permanece habilitada.
+
+- `GET /api/registry`: cadastro atual, com `q`, `type`, `status`, `limit` (1–500) e `offset`.
+- `POST /api/registry`: edição manual em JSON `{ "mmsi": "...", "fields": { "model": "...", "manufacturer": "...", "vessel_class": "...", "notes": "...", "source_url": "https://..." } }`.
 
 - `GET /api/objects`: posição atual ou `at` em ISO 8601 com fuso. Aceita `q`, `source`, `object_type`, `type`, `size`, `motion`, `ids` separados por vírgula e `bounds=sul,oeste,norte,leste`.
 - `GET /api/vessels`: compatibilidade com a camada marítima.
