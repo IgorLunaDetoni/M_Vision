@@ -1,8 +1,11 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $venvPython = Join-Path $PSScriptRoot '.venv/Scripts/python.exe'
+$aisPython = Join-Path $PSScriptRoot 'data/runtime/Scripts/python.exe'
 $bundledPython = Join-Path $env:USERPROFILE '.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
-if (Test-Path -LiteralPath $venvPython) {
+if (Test-Path -LiteralPath $aisPython) {
+    & $aisPython app.py
+} elseif (Test-Path -LiteralPath $venvPython) {
     & $venvPython app.py
 } elseif (Get-Command python -ErrorAction SilentlyContinue) {
     python app.py

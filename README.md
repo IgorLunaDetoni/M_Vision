@@ -21,7 +21,7 @@ A demonstração usa apenas a biblioteca padrão do Python. Leaflet, fontes e ti
 - Trajetória das últimas 6 horas coletadas. Intervalos acima de 30 minutos e cruzamentos da linha de mudança de data não são unidos por linhas.
 - Consulta de uma data/hora nos últimos 30 dias: mostra o último estado conhecido e coletado até aquele instante, sem usar nomes/metadados recebidos no futuro e sem interpolar posições.
 - Exportação **CSV ou XLSX**, com seleção de dados **tratados ou brutos**, obedecendo aos filtros. Sem período, exporta o mapa consultado; com início/fim, exporta as observações **coletadas** no intervalo, inclusive múltiplas observações do mesmo objeto.
-- Favoritos no navegador. Atualização automática do mapa a cada 5 minutos; botão Atualizar para consulta imediata. No histórico, o horário consultado permanece fixo.
+- Favoritos no navegador. Atualização automática do mapa a cada 50 segundos; botão Atualizar para consulta imediata. No histórico, o horário consultado permanece fixo.
 
 Os campos de data da interface usam o fuso do navegador; armazenamento e detalhes usam UTC. O histórico começa com a coleta: períodos com o computador desligado terão lacunas. Na demonstração, consultar antes da primeira inicialização devolve uma consulta vazia.
 
@@ -61,6 +61,8 @@ Respostas de aeronaves podem conter vários objetos. Na exportação bruta filtr
 
 ## Conectar embarcações: AISStream
 
+Com as dependências instaladas, execute `.\start-aisstream.ps1` para iniciar a fonte real. O iniciador solicita a chave com entrada oculta, sem gravá-la em arquivo. Crie sua chave na conta do [AISStream](https://aisstream.io/); conectar o Git no VS Code não configura essa credencial. Acesse `http://127.0.0.1:8000` após iniciar.
+
 O adaptador está implementado, mas precisa de uma chave própria. Consulte a [documentação oficial](https://aisstream.io/documentation) para acesso, cobertura e limites. As condições de armazenamento e exportação devem ser confirmadas com o fornecedor. Nenhuma conta real foi conectada para validar esta entrega.
 
 ```powershell
@@ -72,9 +74,9 @@ $env:AISSTREAM_API_KEY = [System.Net.NetworkCredential]::new('', $aisSecret).Pas
 .\start.cmd
 ```
 
-A assinatura padrão cobre o mundo, sem filtro por embarcação. O coletor lê continuamente o WebSocket comprimido; não desliga entre consultas do mapa. Recebe posições de classe A/B e dados estáticos tipo 5 e reconecta com espera progressiva. O horário `MetaData.time_utc`, quando válido, data a posição; caso contrário, registra explicitamente o horário da coleta. Credenciais e erros do fornecedor nunca são gravados nos arquivos de telemetria.
+A assinatura padrão cobre uma área aproximada do Brasil e águas próximas, delimitada por `AISSTREAM_BOUNDING_BOXES=[[[-40,-80],[10,-25]]]` (sudoeste e nordeste em latitude/longitude). É uma caixa retangular, não uma fronteira marítima, e inclui partes de países vizinhos e do Atlântico. Ajuste essa variável para outra região; as coordenadas devem seguir o formato documentado em `.env.example`. O coletor lê continuamente o WebSocket comprimido; não desliga entre consultas do mapa. Recebe posições de classe A/B e dados estáticos tipo 5 e reconecta com espera progressiva. O horário `MetaData.time_utc`, quando válido, data a posição; caso contrário, registra explicitamente o horário da coleta. Credenciais e erros do fornecedor nunca são gravados nos arquivos de telemetria.
 
-A cobertura corresponde aos receptores da fonte e pode ter lacunas, principalmente em oceanos. AIS básico não garante subtipos como LNG/LPG, contêiner ou graneleiro. Destino/status são autodeclarados. Os filtros do mapa não alteram a coleta mundial. Para restringir a própria assinatura, use `AISSTREAM_BOUNDING_BOXES`, conforme `.env.example`.
+A cobertura corresponde aos receptores da fonte e pode ter lacunas, principalmente em oceanos. AIS básico não garante subtipos como LNG/LPG, contêiner ou graneleiro. Destino/status são autodeclarados. Os filtros do mapa não alteram a área de coleta. Para restringir a própria assinatura, use `AISSTREAM_BOUNDING_BOXES`, conforme `.env.example`.
 
 ## Conectar aeronaves: OpenSky (opcional)
 
@@ -103,7 +105,7 @@ $env:AIRCRAFT_SOURCE = 'disabled'
 .\start.cmd
 ```
 
-`COLLECTION_INTERVAL_SECONDS` aceita valores a partir de 300 para a coleta OpenSky. O mapa consulta a cada 5 minutos. Para outra porta, defina `$env:PORT = '8001'` antes de iniciar.
+`COLLECTION_INTERVAL_SECONDS` aceita valores a partir de 300 para a coleta OpenSky. O mapa consulta a cada 50 segundos. Para outra porta, defina `$env:PORT = '8001'` antes de iniciar.
 
 ## APIs locais e limites
 

@@ -109,7 +109,7 @@ def create_server(port=8000, source="demo", store=None, interval=300):
                 payload = {"source": source, "connection": store.connection, "connections": store.connections,
                            "objects": rows, "vessels": rows, "total": total, "truncated": total > len(rows),
                            "served_at": stamp(), "reference_at": at, "retention_days": store.retention_days,
-                           "refresh_seconds": interval, "storage_error": store.storage_error}
+                           "refresh_seconds": 50, "storage_error": store.storage_error}
                 return self.respond(json.dumps(payload, ensure_ascii=False, allow_nan=False).encode())
             if path == "/api/trajectory":
                 object_id = first("object_id")
@@ -198,7 +198,7 @@ def main():
         except ImportError:
             raise SystemExit("Instale o coletor: python -m pip install -r requirements.txt")
         try:
-            boxes = parse_boxes(os.getenv("AISSTREAM_BOUNDING_BOXES", "[[[-90,-180],[90,180]]]"))
+            boxes = parse_boxes(os.getenv("AISSTREAM_BOUNDING_BOXES"))
         except (ValueError, TypeError) as exc:
             raise SystemExit(str(exc))
         collector_loop = asyncio.new_event_loop()

@@ -77,6 +77,7 @@ class NormalizationTests(unittest.TestCase):
         self.assertIsNone(normalize(message))
 
     def test_boxes_validation(self):
+        self.assertEqual(parse_boxes(), [[[-40, -80], [10, -25]]])
         self.assertEqual(parse_boxes('[[[-90,-180],[90,180]]]'), [[[-90, -180], [90, 180]]])
         for raw in ('[]', '{}', '[[[91,0],[0,0]]]', '[[[0,0]]]', '[[[true,0],[0,0]]]'):
             with self.assertRaises(ValueError):

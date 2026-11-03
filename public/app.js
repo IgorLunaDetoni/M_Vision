@@ -151,4 +151,4 @@ $("export").addEventListener("click",async()=>{
   }catch(error){notify(error.message || "Falha na exportação.");}finally{button.disabled=false;}
 });
 if(window.innerWidth<=600)document.querySelector(".filters").open=false;
-initMap();loadData();setInterval(()=>{if(!state.at)loadData();},300000);
+initMap();loadData();setInterval(()=>{if(!state.at)loadData();},50000);

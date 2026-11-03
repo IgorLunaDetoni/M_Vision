@@ -7,6 +7,7 @@ from mvision.store import stamp
 
 POSITIONS = {"PositionReport", "StandardClassBPositionReport", "ExtendedClassBPositionReport"}
 MESSAGE_TYPES = sorted(POSITIONS | {"ShipStaticData"})
+DEFAULT_BOUNDING_BOXES = (((-40, -80), (10, -25)),)
 STATUSES = {0: "Em navegação", 1: "Fundeado", 2: "Sem governo", 3: "Manobra restrita",
             4: "Restrito pelo calado", 5: "Atracado", 6: "Encalhado", 7: "Em pesca",
             8: "À vela", 15: "Não informado"}
@@ -95,8 +96,9 @@ def normalize(message, received_at=None):
     return update
 
 
-def parse_boxes(raw):
-    boxes = json.loads(raw)
+def parse_boxes(raw=None):
+    boxes = (json.loads(raw) if raw is not None else
+             [[list(corner) for corner in box] for box in DEFAULT_BOUNDING_BOXES])
     if not isinstance(boxes, list) or not boxes:
         raise ValueError("AISSTREAM_BOUNDING_BOXES deve conter ao menos uma área.")
     for box in boxes:
@@ -148,4 +150,3 @@ async def collect(store, key, boxes, connect=None):
             store.set_connection("reconnecting")
         await asyncio.sleep(delay + random.uniform(0, 1))
         delay = min(delay * 2, 60)
-
