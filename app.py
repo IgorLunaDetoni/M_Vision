@@ -120,6 +120,18 @@ def create_server(port=8000, source="demo", store=None, interval=300):
             first = lambda key, default=None: params.get(key, [default])[0]
             filters = query_filters(params)
             at = first("at")
+            if path == '/api/coverage':
+                bounds = filters.get('bounds')
+                if not bounds:
+                    raise ValueError('Informe a área a verificar.')
+                report = store.coverage(bounds, at=at)
+                boxes = parse_boxes(os.getenv('AISSTREAM_BOUNDING_BOXES'))
+                south, west, north, east = bounds
+                inside = west <= east and any(min(a[0], b[0]) <= south <= north <= max(a[0], b[0])
+                    and min(a[1], b[1]) <= west <= east <= max(a[1], b[1]) for a, b in boxes)
+                report.update(subscription_contains_area=inside, source=source, connections=store.connections,
+                              reference_at=at, served_at=stamp())
+                return self.respond(json.dumps(report, ensure_ascii=False).encode())
             if path == '/api/registry/diagnostics':
                 with store.lock:
                     store.flush()

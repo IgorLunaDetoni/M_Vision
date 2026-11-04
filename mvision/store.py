@@ -232,6 +232,16 @@ class VesselStore:
                  and matches(item, filters or {})]
         return items[:limit] if limit is not None else items, len(items)
 
+    def coverage(self, bounds, at=None):
+        reference = instant(at)
+        items, total = self.snapshot(limit=None, at=at, filters={'object_type': 'vessel', 'bounds': bounds})
+        return {'total': total,
+                'recent_15m': sum(reference - instant(item['updated_at']) <= timedelta(minutes=15) for item in items),
+                'recent_24h': sum(reference - instant(item['updated_at']) <= timedelta(hours=24) for item in items),
+                'last_position_at': max((item['updated_at'] for item in items), default=None),
+                'medium': sum(50 <= (item.get('length') or 0) < 250 for item in items),
+                'unknown_size': sum(not item.get('length') for item in items)}
+
     def history(self, start, end, filters=None, raw=False):
         start, end = instant(start), instant(end)
         if start > end or start < datetime.now(UTC) - timedelta(days=self.retention_days) or end > datetime.now(UTC) + timedelta(seconds=5):
@@ -355,8 +365,15 @@ def matches(item, filters):
     if filters.get("keys") and f"{item.get('source')}:{item.get('object_id')}" not in filters["keys"]:
         return False
     size, motion = filters.get("size") or "all", filters.get("motion") or "all"
-    if size != "all" and (item.get("length") is None or (item["length"] < 250 if size == "large" else item["length"] >= 250)):
-        return False
+    if size != "all":
+        length = item.get('length')
+        ranges = {'large': (250, float('inf')), 'medium': (50, 250),
+                  'compact': (0, 50), 'small': (0, 250)}  # Preserve legacy <250 API filter.
+        if size == 'unknown':
+            if length is not None and length > 0:
+                return False
+        elif size not in ranges or length is None or length <= 0 or not ranges[size][0] <= length < ranges[size][1]:
+            return False
     if motion != "all" and (item.get("speed") is None or (item["speed"] <= .5 if motion == "moving" else item["speed"] > .5)):
         return False
     if filters.get("bounds"):

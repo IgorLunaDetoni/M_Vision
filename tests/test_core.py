@@ -11,7 +11,7 @@ from urllib.request import urlopen
 from app import create_server
 from mvision.ais import collect, normalize, parse_boxes, vessel_type
 from mvision.demo import demo_vessels
-from mvision.store import VesselStore
+from mvision.store import VesselStore, matches
 
 
 def position(**fields):
@@ -27,6 +27,14 @@ def static(**fields):
 
 
 class NormalizationTests(unittest.TestCase):
+    def test_size_boundaries_and_missing_lengths(self):
+        for length, expected in ((12, 'compact'), (49.9, 'compact'), (50, 'medium'),
+                                 (249.9, 'medium'), (250, 'large'), (None, 'unknown'), (0, 'unknown')):
+            for size in ('compact', 'medium', 'large', 'unknown'):
+                self.assertEqual(matches({'length': length}, {'size': size}), size == expected)
+        self.assertTrue(matches({'length': 125}, {'size': 'small'}))
+        self.assertTrue(matches({}, {'size': 'all'}))
+
     def test_position_coordinates_and_identifiers(self):
         item = normalize(position())
         self.assertEqual(item["mmsi"], "123456789")
@@ -123,6 +131,20 @@ class PersistenceTests(unittest.TestCase):
     def tearDown(self):
         self.store.close()
         self.temp.cleanup()
+
+    def test_area_coverage_includes_all_sizes_and_distinguishes_recent_positions(self):
+        now = datetime.now(timezone.utc)
+        for identity, length, hours in (('123456789', 120, 0), ('223456789', 15, 2), ('323456789', None, 48)):
+            item = dict(normalize(position()), mmsi=identity, object_id=identity, length=length,
+                        updated_at=(now-timedelta(hours=hours)).isoformat())
+            self.store.upsert(item)
+        report = self.store.coverage([-24, -44, -23, -42])
+        self.assertEqual(report['total'], 3)
+        self.assertEqual(report['medium'], 1)
+        self.assertEqual(report['unknown_size'], 1)
+        self.assertEqual(report['recent_15m'], 1)
+        self.assertEqual(report['recent_24h'], 2)
+        self.assertEqual(self.store.coverage([0, 0, 1, 1])['total'], 0)
 
     def test_static_and_position_merge_in_both_orders(self):
         for updates in ((normalize(static()), normalize(position())), (normalize(position()), normalize(static()))):

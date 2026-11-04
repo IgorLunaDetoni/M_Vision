@@ -134,6 +134,19 @@ class VesselRegistry:
             self.record_sources(item, item['manual'], 'Manual', item['manual_updated_at'])
             self.db.execute('UPDATE vessel_registry SET payload=? WHERE mmsi=?', (json.dumps(item, ensure_ascii=False), mmsi))
 
+    def retry_tls_errors(self):
+        count = 0
+        with self.lock, self.db:
+            for record in self.db.execute("SELECT mmsi, payload FROM vessel_registry WHERE status='error'").fetchall():
+                item = json.loads(record['payload'])
+                if 'certificado HTTPS' not in (item.get('error') or ''):
+                    continue
+                item['error'] = None
+                self.db.execute("UPDATE vessel_registry SET payload=?, status='pending', next_attempt='' WHERE mmsi=?",
+                                (json.dumps(item, ensure_ascii=False), record['mmsi']))
+                count += 1
+        return count
+
     def claim(self):
         # The reservation is committed before network I/O, including across CLI processes.
         with self.lock:

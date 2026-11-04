@@ -1,9 +1,10 @@
 import json
+import ssl
 import tempfile
 import threading
 import unittest
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app import create_server
@@ -78,6 +79,20 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(crawl_one(self.registry, limited), (True, 1200))
         self.assertIsNone(self.registry.claim())
 
+    def test_only_tls_failures_are_requeued(self):
+        def fail(_):
+            raise URLError(ssl.SSLCertVerificationError('expired'))
+        crawl_one(self.registry, fail)
+        self.assertEqual(self.registry.list(status='error')[1], 1)
+        self.assertEqual(self.registry.retry_tls_errors(), 1)
+        item = self.registry.list()[0][0]
+        self.assertEqual(item['crawl_status'], 'pending')
+        self.assertIsNone(item['error'])
+        self.assertEqual(self.registry.retry_tls_errors(), 0)
+        self.registry.complete(self.registry.claim(), 'error', error='HTTP 429', retry_seconds=3600)
+        self.assertEqual(self.registry.retry_tls_errors(), 0)
+        self.assertIsNone(self.registry.claim())
+
     def test_edit_validation(self):
         for fields in ({'source_url': 'javascript:alert(1)'}, {'model': 123}, {'imo': '0000000'}):
             with self.assertRaises(ValueError):
@@ -139,6 +154,10 @@ class RegistryTests(unittest.TestCase):
                 self.assertEqual(json.load(response)['total'], 1)
             with urlopen(base + '/api/registry/diagnostics') as response:
                 self.assertEqual(json.load(response)['coverage']['imo']['filled'], 1)
+            with urlopen(base + '/api/coverage?bounds=-24,-44,-23,-42') as response:
+                coverage = json.load(response)
+                self.assertEqual(coverage['total'], 0)  # Static-only fixture has no position.
+                self.assertTrue(coverage['subscription_contains_area'])
             body = json.dumps({'mmsi': '123456789', 'fields': {'model': 'Teste'}}).encode()
             request = Request(base + '/api/registry', body, {'Content-Type': 'application/json', 'Origin': base})
             with urlopen(request) as response:

@@ -9,9 +9,10 @@ import threading
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from mvision.registry import VesselRegistry
+from mvision.network import https_open
 
 ENDPOINT = 'https://query.wikidata.org/sparql'
 PROPERTIES = {
@@ -43,7 +44,8 @@ WHERE {
 } LIMIT 1001'''
 
 
-def lookup(vessel, opener=urlopen):
+def lookup(vessel, opener=None):
+    opener = opener or https_open
     request = Request(ENDPOINT + '?' + urlencode({'query': query_for(vessel), 'format': 'json'}),
                       headers={'Accept': 'application/sparql-results+json',
                                'User-Agent': 'MVisionLocal/1.0 (local vessel particulars; Python urllib)'})
@@ -119,6 +121,10 @@ def crawl_one(registry, fetch=lookup):
 
 
 def collect_particulars(registry, stop):
+    try:
+        registry.retry_tls_errors()
+    except sqlite3.Error:
+        pass  # Existing retry times still apply if startup requeue is unavailable.
     while not stop.is_set():
         try:
             _, delay = crawl_one(registry)
@@ -132,6 +138,7 @@ def main():
     parser = argparse.ArgumentParser(description='Complementar o cadastro local com dados do Wikidata.')
     parser.add_argument('--database', default=str(Path(os.getenv('MVISION_DATA_DIR', 'data')) / 'vessels.sqlite3'))
     parser.add_argument('--limit', type=int, default=10, help='Máximo de embarcações consultadas nesta execução.')
+    parser.add_argument('--retry-tls-errors', action='store_true', help='Reagendar somente falhas de certificado HTTPS antes do lote.')
     args = parser.parse_args()
     if not 1 <= args.limit <= 100:
         parser.error('--limit deve ser de 1 a 100')
@@ -141,6 +148,8 @@ def main():
     db = sqlite3.connect(str(path), timeout=30)
     db.row_factory = sqlite3.Row
     registry = VesselRegistry(db, threading.RLock())
+    if args.retry_tls_errors:
+        print(f'{registry.retry_tls_errors()} falhas HTTPS reagendadas.', flush=True)
     stop = threading.Event()
     try:
         for index in range(args.limit):

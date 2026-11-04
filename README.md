@@ -63,6 +63,10 @@ Respostas de aeronaves podem conter vários objetos. Na exportação bruta filtr
 
 O filtro **Tipo de embarcação** inclui pesca (AIS 30), rebocador/reboque (31, 32 e 52), passageiros (60–69), veleiro (36) e recreio (37), além de carga e navios-tanque. A classificação aparece na lista, na ficha e nas cores do mapa; os filtros também se aplicam às exportações. Ela depende do tipo transmitido pela embarcação, sem inferência pelo nome. Mensagens `StaticDataReport` classe B complementam nome, tipo, indicativo e dimensões, associadas pelo MMSI. Embarcações já armazenadas serão classificadas conforme novas mensagens estáticas chegarem; o histórico anterior é preservado.
 
+O filtro de porte separa pequeno (`compact`, comprimento > 0 e < 50 m), médio (`medium`, 50 a < 250 m), grande (`large`, ≥ 250 m) e não informado (`unknown`). São faixas operacionais do aplicativo, não uma classificação oficial. A API mantém `small` como compatibilidade com o filtro anterior de comprimento < 250 m. **Todos os portes** inclui as embarcações sem dimensões. O porte não restringe a assinatura AIS: posições classe A/B já são coletadas independentemente do comprimento.
+
+No mapa, **Verificar dados desta área** consulta todas as embarcações com posição no trecho visível, sem os filtros da lista e sem o limite de marcadores. Mostra totais, posições de até 15 minutos/24 horas, porte médio e comprimento ausente. No histórico, as idades são relativas ao horário consultado. Também informa quando a região visível não está integralmente contida em uma das caixas da assinatura configurada. Isso não mede a disponibilidade dos receptores do fornecedor: um porto vazio no mapa significa ausência de posições recebidas/armazenadas nessa área, não ausência de embarcações. A API correspondente é `GET /api/coverage?bounds=sul,oeste,norte,leste`, com `at` opcional.
+
 Com as dependências instaladas, execute `.\start-aisstream.ps1` para iniciar a fonte real. O iniciador solicita a chave com entrada oculta, sem gravá-la em arquivo. Crie sua chave na conta do [AISStream](https://aisstream.io/); conectar o Git no VS Code não configura essa credencial. Acesse `http://127.0.0.1:8000` após iniciar.
 
 O adaptador está implementado, mas precisa de uma chave própria. Consulte a [documentação oficial](https://aisstream.io/documentation) para acesso, cobertura e limites. As condições de armazenamento e exportação devem ser confirmadas com o fornecedor. Nenhuma conta real foi conectada para validar esta entrega.
@@ -140,6 +144,17 @@ Para executar um lote manual, respeitando a fila e os intervalos:
 ```
 
 Se usar seu próprio ambiente, substitua o executável pelo Python correspondente. O argumento `--database` permite escolher outro índice SQLite. O cadastro precisa ter sido criado pela inicialização do aplicativo. Falhas de rede/certificado aparecem na coluna de consulta e não interrompem a coleta AIS; a validação HTTPS permanece habilitada.
+
+Para o HTTPS das consultas ao Wikidata, `truststore` usa a validação nativa de certificados do sistema operacional, sem modificar o comportamento SSL global. No Windows, isso permite construir a cadeia usando CryptoAPI em vez de depender apenas da cadeia obtida pelo OpenSSL. Certificados e nomes de servidor continuam sendo verificados; sem a dependência, usa-se a validação padrão do Python. Na validação local de 04/11/2026, o Windows aceitou a cadeia que o OpenSSL rejeitava como expirada, e as consultas reais passaram com o contexto nativo. Consulte a [documentação do truststore](https://truststore.readthedocs.io/en/stable/).
+
+Após atualizar as dependências, reinicie o app no terminal que contém sua chave AIS. A inicialização do coletor complementar reagenda somente os erros de certificado HTTPS; outros erros e limites HTTP mantêm seus prazos. A fila é processada gradualmente, com intervalo mínimo de 10 segundos. Para reagendar essas falhas e validar um lote manual:
+
+```powershell
+.\data\runtime\Scripts\python.exe -m pip install -r requirements.txt
+.\data\runtime\Scripts\python.exe -m mvision.enrichment --retry-tls-errors --limit 3
+```
+
+Se a falha persistir mesmo com `truststore`, confira a data/hora e a cadeia de certificados do sistema/rede; a aplicação não desativa a validação HTTPS.
 
 - `GET /api/registry`: cadastro atual, com `q`, `type`, `status`, `limit` (1–500) e `offset`.
 - `GET /api/registry/diagnostics`: diagnóstico completo da base atual, sem filtros ou paginação.

@@ -29,3 +29,9 @@ Uma tentativa isolada com a consulta ampliada encontrou `CERTIFICATE_VERIFY_FAIL
 3. Medir o ganho de cobertura de cada campo antes de selecionar uma segunda fonte.
 
 O diagnóstico é uma fotografia inicial; executar `python -m mvision.diagnostics` produz números atualizados. Modelos comerciais continuam dependentes de confirmação; tipo no Wikidata, classe e modelo permanecem distintos.
+
+## Validação posterior no mesmo dia
+
+A base passou a conter 946 cadastros: 88 com comprimento inferior a 50 m, 388 de 50 a < 250 m, 71 com 250 m ou mais e 399 sem comprimento conhecido. O coletor AIS já recebe posições classe A/B sem filtro de comprimento; o filtro visual agora separa o porte médio.
+
+O teste HTTPS via Windows retornou 200. A consulta Python foi corrigida para usar um contexto explícito de `truststore`, com verificação de certificado e hostname. Uma consulta isolada retornou dados do Emma Mærsk. Um lote real do cadastro retornou uma correspondência (Tordis Knutsen) e duas ausências de correspondência, sem erro HTTPS. O processo que já estava aberto ainda precisa ser reiniciado para carregar esse código. Os resultados anteriores de erro serão reagendados na inicialização do coletor.
