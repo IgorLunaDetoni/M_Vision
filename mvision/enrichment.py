@@ -14,6 +14,11 @@ from urllib.request import Request, urlopen
 from mvision.registry import VesselRegistry
 
 ENDPOINT = 'https://query.wikidata.org/sparql'
+PROPERTIES = {
+    'manufacturer': 'P176', 'vessel_class': 'P289', 'country': 'P8047',
+    'vessel_subtype': 'P31', 'operator': 'P137', 'inception': 'P571',
+    'service_entry': 'P729', 'gross_tonnage': 'P1093',
+}
 
 
 def query_for(vessel):
@@ -25,17 +30,17 @@ def query_for(vessel):
         match = f'?ship wdt:P587 "{mmsi}".'
     else:
         raise ValueError('Identificador inválido.')
+    branches = ' UNION '.join('{ ?ship wdt:' + prop + ' ?value. BIND("' + field + '" AS ?field) }'
+                              for field, prop in PROPERTIES.items())
     return '''PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 PREFIX bd: <http://www.bigdata.com/rdf#>
-SELECT DISTINCT ?ship ?shipLabel ?manufacturerLabel ?vesselClassLabel ?countryLabel
+SELECT DISTINCT ?ship ?shipLabel ?field ?value ?valueLabel
 WHERE {
   { SELECT DISTINCT ?ship WHERE { ''' + match + ''' } LIMIT 2 }
-  OPTIONAL { ?ship wdt:P176 ?manufacturer. }
-  OPTIONAL { ?ship wdt:P289 ?vesselClass. }
-  OPTIONAL { ?ship wdt:P8047 ?country. }
+  OPTIONAL { ''' + branches + ''' }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "pt,en". }
-} LIMIT 100'''
+} LIMIT 1001'''
 
 
 def lookup(vessel, opener=urlopen):
@@ -49,6 +54,8 @@ def lookup(vessel, opener=urlopen):
     bindings = json.loads(raw)['results']['bindings']
     if not isinstance(bindings, list):
         raise ValueError('Resposta inválida.')
+    if len(bindings) >= 1001:
+        raise ValueError('Resposta truncada; resultado não aplicado.')
     entities = {row['ship']['value'] for row in bindings}
     if not entities:
         return 'not_found', {}
@@ -58,14 +65,32 @@ def lookup(vessel, opener=urlopen):
     if not re.fullmatch(r'https?://www\.wikidata\.org/entity/Q[0-9]+', entity):
         raise ValueError('Entidade inválida.')
     fields = {}
+    field_sources = {}
+    source_url = 'https://www.wikidata.org/wiki/' + entity.rsplit('/', 1)[-1]
+    for field, prop in PROPERTIES.items():
+        evidence = []
+        for row in bindings:
+            if row.get('field', {}).get('value') != field or 'value' not in row:
+                continue
+            value = row.get('valueLabel', row['value'])['value']
+            if re.fullmatch(r'Q[0-9]+', value) or value.startswith('http://www.wikidata.org/entity/'):
+                continue
+            item = {'value': value[:2000], 'source': 'Wikidata', 'source_url': source_url,
+                    'property': prop, 'value_id': row['value']['value']}
+            if item not in evidence:
+                evidence.append(item)
+        if evidence:
+            fields[field] = '; '.join(sorted({item['value'] for item in evidence}))[:2000]
+            field_sources[field] = evidence
     for key, field in (('manufacturerLabel', 'manufacturer'), ('vesselClassLabel', 'vessel_class'),
                        ('countryLabel', 'country'), ('shipLabel', 'name')):
         values = sorted({row[key]['value'] for row in bindings if key in row
                          and not re.fullmatch(r'Q[0-9]+', row[key]['value'])})
-        if values:
+        if values and field not in fields:
             fields[field] = '; '.join(values)[:2000]
     fields.update(source='Wikidata', source_url='https://www.wikidata.org/wiki/' + entity.rsplit('/', 1)[-1],
                   matched_by='imo' if re.fullmatch(r'[0-9]{7}', str(vessel.get('imo') or '')) else 'mmsi')
+    fields['field_sources'] = field_sources
     return 'matched', fields
 
 

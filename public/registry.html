@@ -12,6 +12,7 @@
     <header><div><a href="/">← Voltar ao mapa</a><h1>Cadastro de embarcações</h1></div><button id="refresh">Atualizar tabela</button></header>
     <p>Cadastro local das embarcações reais identificadas. Dados AIS e informações complementares permanecem separados. Atualização da tabela a cada 50 segundos.</p>
     <p>O coletor consulta o Wikidata por IMO ou MMSI. Campos ausentes permanecem sem informação. Classe/projeto não confirma modelo comercial.</p>
+    <details id="diagnostics"><summary>Carregando diagnóstico…</summary></details>
     <form id="filters">
       <label>Buscar nome, MMSI, IMO ou modelo<input id="query" type="search" placeholder="Identificador ou informação"></label>
       <label>Tipo<select id="type"><option value="">Todos os tipos</option><option value="cargo">Carga</option><option value="tanker">Navio-tanque</option><option value="fishing">Pesca</option><option value="tug">Rebocador / reboque</option><option value="passenger">Passageiros</option><option value="sailing">Veleiro</option><option value="pleasure">Recreio</option><option value="other">Outros</option><option value="unknown">Não informado</option></select></label>

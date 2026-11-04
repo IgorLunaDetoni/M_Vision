@@ -6,6 +6,26 @@ const escape=value=>String(value??"—").replace(/[&<>"']/g,c=>({'&':'&amp;','<'
 const date=value=>value?new Date(value).toLocaleString('pt-BR'):"—";
 const sourceLink=url=>{try{const parsed=new URL(url);return ['https:','http:'].includes(parsed.protocol)?`<a href="${escape(parsed.href)}" target="_blank" rel="noopener noreferrer">Ver fonte</a>`:"";}catch{return "";}};
 let offset=0,total=0,rows=[],selected=null,sequence=0;
+
+const labels={name:"Nome",imo:"IMO",callsign:"Indicativo",type:"Tipo AIS",length:"Comprimento",width:"Largura",destination:"Destino",model:"Modelo",manufacturer:"Estaleiro",vessel_class:"Classe/projeto",country:"País de registro",vessel_subtype:"Tipo no Wikidata",operator:"Operador informado",inception:"Criação/construção (P571)",service_entry:"Entrada em serviço",gross_tonnage:"Arqueação bruta (GT)"};
+function evidence(v){
+  const entries=Object.entries(v.field_sources||{});
+  if(!entries.length)return '';
+  return `<details><summary>Histórico de fontes por campo</summary><p>Observações coletadas; podem incluir valores anteriores. Dados do Wikidata não confirmam vigência atual.</p>${entries.map(([key,items])=>`<p><strong>${escape(labels[key]||key)}</strong>${items.map(e=>`<small>${escape(e.value)} · ${escape(e.source)} · ${escape(date(e.collected_at))} ${sourceLink(e.source_url)} ${e.property?escape(e.property):''}</small>`).join('')}</p>`).join('')}</details>`;
+}
+function particulars(v){
+  return ['vessel_subtype','operator','inception','service_entry','gross_tonnage'].filter(k=>v.enrichment?.[k]).map(k=>`<small>${escape(labels[k])}: ${escape(v.enrichment[k])}</small>`).join('')+
+    (v.conflicts?.length?'<small>Valores manuais divergem da fonte pública: '+v.conflicts.map(k=>escape(labels[k]||k)).join(', ')+'</small>':'')+evidence(v);
+}
+async function diagnostics(){
+  try{
+    const response=await fetch('/api/registry/diagnostics',{signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw Error('Não foi possível carregar o diagnóstico.');
+    const d=await response.json();
+    $('diagnostics').innerHTML=`<summary>Diagnóstico: ${d.total} embarcações</summary><p>Consultadas: ${d.checked}. Com dados externos: ${d.with_external_data}. Atualizado: ${escape(date(d.generated_at))}.</p><p>${Object.entries(d.statuses).map(([k,n])=>`${escape(statuses[k]||k)}: ${n}`).join(' · ')}</p><table><thead><tr><th>Campo</th><th>Preenchidos</th><th>Ausentes</th><th>Cobertura</th></tr></thead><tbody>${Object.entries(d.coverage).map(([k,c])=>`<tr><td>${escape(labels[k]||k)}</td><td>${c.filled}</td><td>${c.missing}</td><td>${c.percent}%</td></tr>`).join('')}</tbody></table>`;
+  }catch(error){$('diagnostics').textContent=error.message;}
+}
+
 function field(v,key){const manual=v.manual?.[key];return `${escape(manual||v.enrichment?.[key]||"Não informado")}${manual?'<small>Preenchimento manual</small>':''}`;}
 async function load(){
   const ticket=++sequence;
@@ -16,7 +36,7 @@ async function load(){
     const data=await response.json();if(ticket!==sequence)return;
     rows=data.vessels;total=data.total;
     if(offset>=total&&offset>0){offset=Math.max(0,Math.floor((total-1)/100)*100);return load();}
-    $('rows').innerHTML=rows.map(v=>`<tr><td><strong>${escape(v.name)}</strong><small>MMSI ${escape(v.mmsi)}</small><small>IMO ${escape(v.imo)}</small><small>Indicativo ${escape(v.callsign)}</small></td><td>${escape(types[v.type]||'Não informado')}</td><td>${field(v,'model')}</td><td>${field(v,'manufacturer')}</td><td>${field(v,'vessel_class')}</td><td>Comprimento: ${escape(v.length)} m<br>Largura: ${escape(v.width)} m<br>Destino: ${escape(v.destination)}<small>Última coleta AIS: ${escape(date(v.last_seen))}</small></td><td>${escape(v.enrichment?.country||'País não informado')}<small>${escape(v.enrichment?.source||'Sem dados públicos associados')}</small>${sourceLink(v.enrichment?.source_url)}${v.manual?.source_url?'<small>Fonte manual: '+sourceLink(v.manual.source_url)+'</small>':''}<small>${escape(v.manual?.notes||'')}</small></td><td><span class="badge">${escape(statuses[v.crawl_status]||v.crawl_status)}</span><small>${escape(date(v.checked_at))}</small><small>${escape(v.error||'')}</small>${v.enrichment?.matched_by?'<small>Identificado por '+escape(v.enrichment.matched_by.toUpperCase())+'</small>':''}</td><td><button data-edit="${escape(v.mmsi)}">Editar</button></td></tr>`).join('')||'<tr><td colspan="9">Nenhuma embarcação cadastrada nesta consulta. O cadastro é preenchido pela coleta AIS real.</td></tr>';
+    $('rows').innerHTML=rows.map(v=>`<tr><td><strong>${escape(v.name)}</strong><small>MMSI ${escape(v.mmsi)}</small><small>IMO ${escape(v.imo)}</small><small>Indicativo ${escape(v.callsign)}</small></td><td>${escape(types[v.type]||'Não informado')}</td><td>${field(v,'model')}</td><td>${field(v,'manufacturer')}</td><td>${field(v,'vessel_class')}</td><td>Comprimento: ${escape(v.length)} m<br>Largura: ${escape(v.width)} m<br>Destino: ${escape(v.destination)}<small>Última coleta AIS: ${escape(date(v.last_seen))}</small></td><td>${escape(v.enrichment?.country||'País não informado')}<small>${escape(v.enrichment?.source||'Sem dados públicos associados')}</small>${sourceLink(v.enrichment?.source_url)}${particulars(v)}${v.manual?.source_url?'<small>Fonte manual: '+sourceLink(v.manual.source_url)+'</small>':''}<small>${escape(v.manual?.notes||'')}</small></td><td><span class="badge">${escape(statuses[v.crawl_status]||v.crawl_status)}</span><small>${escape(date(v.checked_at))}</small><small>${escape(v.error||'')}</small>${v.enrichment?.matched_by?'<small>Identificado por '+escape(v.enrichment.matched_by.toUpperCase())+'</small>':''}</td><td><button data-edit="${escape(v.mmsi)}">Editar</button></td></tr>`).join('')||'<tr><td colspan="9">Nenhuma embarcação cadastrada nesta consulta. O cadastro é preenchido pela coleta AIS real.</td></tr>';
     $('summary').textContent=`${total.toLocaleString('pt-BR')} embarcações nesta consulta. Cadastro persistente no computador.`;
     $('page').textContent=`Página ${Math.floor(offset/100)+1} de ${Math.max(1,Math.ceil(total/100))}`;
     $('previous').disabled=offset===0;$('next').disabled=offset+100>=total;
@@ -24,7 +44,7 @@ async function load(){
 }
 $('filters').addEventListener('submit',event=>{event.preventDefault();offset=0;load();});
 for(const id of ['type','status'])$(id).addEventListener('change',()=>{offset=0;load();});
-$('refresh').addEventListener('click',load);
+$('refresh').addEventListener('click',()=>{load();diagnostics();});
 $('previous').addEventListener('click',()=>{offset=Math.max(0,offset-100);load();});
 $('next').addEventListener('click',()=>{offset+=100;load();});
 $('rows').addEventListener('click',event=>{
@@ -44,4 +64,4 @@ $('edit-form').addEventListener('submit',async event=>{
     $('editor').close();await load();
   }catch(error){$('edit-status').textContent=error.message;}finally{$('save').disabled=false;}
 });
-load();setInterval(load,50000);
+load();diagnostics();setInterval(()=>{load();diagnostics();},50000);

@@ -121,6 +121,18 @@ Ao iniciar com `VESSEL_SOURCE=aisstream`, o coletor complementar consulta o [ser
 
 A cobertura do Wikidata é limitada, especialmente para barcos menores. O coletor preenche fabricante, classe/projeto e país quando disponíveis; **modelo comercial permanece vazio até haver confirmação manual**, pois a classe naval não equivale ao modelo. Não há busca aproximada pelo nome nem raspagem de sites comerciais. O cadastro atual não altera consultas históricas de posição.
 
+O coletor também consulta tipo declarado no Wikidata (`P31`), operador (`P137`), criação/construção (`P571`), entrada em serviço (`P729`) e arqueação bruta (`P1093`, índice GT sem unidade de massa). Criação e entrada em serviço são campos separados; não se infere o ano de construção de uma data de comissionamento. Operador e país informados pelo Wikidata não garantem vigência atual. Múltiplos valores são preservados, sem escolher arbitrariamente um operador como atual. A consulta usa ramos independentes para evitar multiplicação entre propriedades e rejeita respostas que atinjam o limite de resultados.
+
+Na tela de cadastro, **Diagnóstico** mostra cobertura por campo e resultados das consultas para toda a base, independentemente dos filtros da tabela. **Histórico de fontes por campo** mostra valores, origem, URL, propriedade Wikidata e última coleta conhecida. Divergências entre valores manuais e públicos são sinalizadas; o manual mantém prioridade. A tabela permanente `vessel_field_sources` preserva valores anteriores e separa evidências por identidade MMSI/IMO. Não contém as referências bibliográficas originais de cada declaração do Wikidata: a origem registrada é a página da entidade consultada. Dados legados são identificados nos metadados; datas de coleta por campo desconhecidas permanecem vazias.
+
+O diagnóstico também pode ser executado sem iniciar o servidor, abrindo o banco somente para leitura:
+
+```powershell
+.\data\runtime\Scripts\python.exe -m mvision.diagnostics --output data/diagnostico-atual.json
+```
+
+Use `--database` para escolher outro índice. O relatório contém total, resultados de consulta, tipos, cobertura efetiva por campo (manual → externo → AIS), identificadores ausentes/com formato inválido, IMOs compartilhados e erros. O formato do IMO não substitui validação do dígito verificador. Valores `unknown` e dimensões zero não contam como preenchidos. O diagnóstico inicial está documentado em `docs/diagnostico-base-2026-11-04.md`.
+
 Para executar um lote manual, respeitando a fila e os intervalos:
 
 ```powershell
@@ -130,6 +142,7 @@ Para executar um lote manual, respeitando a fila e os intervalos:
 Se usar seu próprio ambiente, substitua o executável pelo Python correspondente. O argumento `--database` permite escolher outro índice SQLite. O cadastro precisa ter sido criado pela inicialização do aplicativo. Falhas de rede/certificado aparecem na coluna de consulta e não interrompem a coleta AIS; a validação HTTPS permanece habilitada.
 
 - `GET /api/registry`: cadastro atual, com `q`, `type`, `status`, `limit` (1–500) e `offset`.
+- `GET /api/registry/diagnostics`: diagnóstico completo da base atual, sem filtros ou paginação.
 - `POST /api/registry`: edição manual em JSON `{ "mmsi": "...", "fields": { "model": "...", "manufacturer": "...", "vessel_class": "...", "notes": "...", "source_url": "https://..." } }`.
 
 - `GET /api/objects`: posição atual ou `at` em ISO 8601 com fuso. Aceita `q`, `source`, `object_type`, `type`, `size`, `motion`, `ids` separados por vírgula e `bounds=sul,oeste,norte,leste`.

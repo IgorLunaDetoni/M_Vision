@@ -9,6 +9,8 @@ from urllib.request import Request, urlopen
 from app import create_server
 from mvision.enrichment import crawl_one, lookup, query_for
 from mvision.store import VesselStore
+from mvision.diagnostics import diagnose
+from mvision.registry import VesselRegistry
 
 
 def vessel(**fields):
@@ -81,6 +83,52 @@ class RegistryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.registry.edit('123456789', fields)
 
+    def test_field_sources_history_conflicts_and_identity_isolation(self):
+        self.registry.edit('123456789', {'manufacturer': 'Manual yard', 'source_url': 'https://example.org/manual'})
+        self.registry.complete(self.registry.claim(), 'matched', {
+            'manufacturer': 'Public yard', 'source': 'Wikidata', 'source_url': 'https://www.wikidata.org/wiki/Q1',
+            'field_sources': {'manufacturer': [{'value': 'Public yard', 'property': 'P176',
+                                               'source_url': 'https://www.wikidata.org/wiki/Q1'}]}})
+        row = self.registry.list()[0][0]
+        self.assertEqual(row['conflicts'], ['manufacturer'])
+        evidence = row['field_sources']['manufacturer']
+        self.assertEqual({e['value'] for e in evidence}, {'Manual yard', 'Public yard'})
+        self.assertTrue(all(e['collected_at'] for e in evidence))
+        self.registry.edit('123456789', {'manufacturer': 'New manual yard'})
+        self.store.close()
+        self.store = VesselStore(self.path)
+        self.registry = self.store.registry
+        row = self.registry.list()[0][0]
+        self.assertEqual(len(row['field_sources']['manufacturer']), 3)
+        self.assertEqual(row['manual']['manufacturer'], 'New manual yard')
+        self.store.upsert(vessel(imo='1234567'))
+        self.store.flush()
+        self.assertNotIn('manufacturer', self.registry.list()[0][0]['field_sources'])
+        self.assertEqual(self.store.db.execute("SELECT count(*) FROM vessel_field_sources WHERE field='manufacturer'").fetchone()[0], 3)
+
+    def test_diagnostics_counts_missing_unknown_and_manual_precedence(self):
+        self.registry.edit('123456789', {'manufacturer': 'Manual yard'})
+        self.registry.complete(self.registry.claim(), 'matched', {'manufacturer': 'Public yard', 'operator': 'Operator'})
+        self.store.upsert(dict(vessel(), mmsi='223456789', object_id='223456789', type='unknown', length=0))
+        self.store.flush()
+        report = diagnose(self.store.db)
+        self.assertEqual(report['total'], 2)
+        self.assertEqual(report['coverage']['type']['filled'], 1)
+        self.assertEqual(report['coverage']['length']['filled'], 0)
+        self.assertEqual(report['coverage']['manufacturer']['manual'], 1)
+        self.assertEqual(report['coverage']['manufacturer']['external'], 0)
+        self.assertEqual(report['coverage']['operator']['external'], 1)
+        self.assertEqual(report['identifiers']['missing_imo'], 1)
+
+    def test_legacy_sources_backfill_without_inventing_field_dates(self):
+        self.store.db.execute('DELETE FROM vessel_field_sources')
+        self.store.db.commit()
+        self.registry = VesselRegistry(self.store.db, self.store.lock)
+        evidence = self.registry.list()[0][0]['field_sources']['name'][0]
+        self.assertEqual(evidence['value'], 'TEST')
+        self.assertTrue(evidence['metadata']['legacy'])
+        self.assertIsNone(evidence['collected_at'])
+
     def test_api_and_manual_edit(self):
         server = create_server(port=0, source='aisstream', store=self.store)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -89,6 +137,8 @@ class RegistryTests(unittest.TestCase):
         try:
             with urlopen(base + '/api/registry?type=fishing') as response:
                 self.assertEqual(json.load(response)['total'], 1)
+            with urlopen(base + '/api/registry/diagnostics') as response:
+                self.assertEqual(json.load(response)['coverage']['imo']['filled'], 1)
             body = json.dumps({'mmsi': '123456789', 'fields': {'model': 'Teste'}}).encode()
             request = Request(base + '/api/registry', body, {'Content-Type': 'application/json', 'Origin': base})
             with urlopen(request) as response:
@@ -137,6 +187,32 @@ class LookupTests(unittest.TestCase):
         self.assertNotIn('model', data)
         self.assertEqual(data['source_url'], 'https://www.wikidata.org/wiki/Q123')
         self.assertEqual(self.fetch([first, {'ship': {'value': 'http://www.wikidata.org/entity/Q456'}}]), ('ambiguous', {}))
+
+    def test_extended_properties_keep_multiple_values_and_field_provenance(self):
+        def binding(field, value, label=None):
+            row = {'ship': {'value': 'http://www.wikidata.org/entity/Q123'},
+                   'field': {'value': field}, 'value': {'value': value}}
+            if label: row['valueLabel'] = {'value': label}
+            return row
+        status, data = self.fetch([
+            binding('operator', 'http://www.wikidata.org/entity/Q1', 'Operator A'),
+            binding('operator', 'http://www.wikidata.org/entity/Q2', 'Operator B'),
+            binding('gross_tonnage', '12000'), binding('inception', '2001-01-01T00:00:00Z'),
+            binding('vessel_subtype', 'http://www.wikidata.org/entity/Q3', 'Container ship'),
+        ])
+        self.assertEqual(status, 'matched')
+        self.assertEqual(data['operator'], 'Operator A; Operator B')
+        self.assertEqual(len(data['field_sources']['operator']), 2)
+        self.assertEqual(data['field_sources']['gross_tonnage'][0]['property'], 'P1093')
+        self.assertEqual(data['inception'], '2001-01-01T00:00:00Z')
+        self.assertNotIn('model', data)
+        query = query_for({'imo': '9876543'})
+        self.assertIn('UNION', query)
+        self.assertIn('wdt:P1093', query)
+
+    def test_truncated_result_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.fetch([{'ship': {'value': 'http://www.wikidata.org/entity/Q123'}}] * 1001)
 
 
 if __name__ == '__main__':

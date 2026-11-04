@@ -18,6 +18,7 @@ from mvision.aircraft import OpenSkyClient, collect_aircraft
 from mvision.demo import demo_aircraft, demo_vessels
 from mvision.exports import export_data
 from mvision.enrichment import collect_particulars
+from mvision.diagnostics import diagnose
 from mvision.store import VesselStore, instant, stamp
 
 ROOT = Path(__file__).resolve().parent
@@ -119,6 +120,11 @@ def create_server(port=8000, source="demo", store=None, interval=300):
             first = lambda key, default=None: params.get(key, [default])[0]
             filters = query_filters(params)
             at = first("at")
+            if path == '/api/registry/diagnostics':
+                with store.lock:
+                    store.flush()
+                    report = diagnose(store.db)
+                return self.respond(json.dumps(report, ensure_ascii=False).encode())
             if path == '/api/registry':
                 limit, offset = int(first('limit', '100')), int(first('offset', '0'))
                 if not 1 <= limit <= 500 or offset < 0:
