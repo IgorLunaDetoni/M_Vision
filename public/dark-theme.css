@@ -1,0 +1,168 @@
+/* Shared night palette for the map, vessel dialogs and persistent registry. */
+:root {
+  color-scheme: dark;
+  --night-bg: #0a111b;
+  --night-panel: #101c29;
+  --night-raised: #172635;
+  --night-input: #0b1622;
+  --night-text: #e4eef7;
+  --night-muted: #a0b4c5;
+  --night-border: #293e50;
+  --teal: #52d7c2;
+  --muted: var(--night-muted);
+  --line: var(--night-border);
+  --tanker: #f2b65b;
+  --container: #74abf5;
+  --bulk: #c29be7;
+  --gas: #52d8cc;
+  --cargo: #8ac7a8;
+  --other: #a8bacb;
+  background: var(--night-bg);
+  color: var(--night-text);
+}
+body { background: radial-gradient(ellipse at top right, #15303b55, transparent 55%), var(--night-bg); color: var(--night-text); }
+::selection { background: #285d63; color: #f5ffff; }
+input, select, textarea { color-scheme: dark; background: var(--night-input); color: var(--night-text); border-color: var(--night-border); accent-color: var(--teal); }
+input::placeholder, textarea::placeholder { color: #8199ac; }
+option { background: var(--night-input); color: var(--night-text); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid #67ead4; outline-offset: 3px; }
+* { scrollbar-color: #3a5368 #0e1925; scrollbar-width: thin; }
+.topbar { background: #0b1520; border-bottom: 1px solid var(--night-border); }
+.brand-symbol { background: #195951; color: #99f5e4; }
+.brand small, .workspace-name, .clock { color: var(--night-muted); }
+.topbar-divider { background: var(--night-border); }
+.avatar { background: var(--night-raised); border-color: #3a5265; }
+.source-badge { background: #342c1d; border-color: #655435; color: #f5ce89; }
+.eyebrow, .subtitle, .metric-label, .metric small, .page-footer { color: var(--night-muted); }
+.footer-slash { color: #617e92; }
+h1 { color: #f1f6fb; }
+.button { color: #cbdce9; background: var(--night-raised); border-color: #345065; }
+.button:hover { background: #20394b; filter: none; }
+.button.primary { color: #071c1a; background: #52d7c2; border-color: #52d7c2; font-weight: 700; }
+.button.primary:hover { background: #7be7d6; border-color: #7be7d6; }
+.metric { background: linear-gradient(135deg, #152635, #101c29); border-color: var(--night-border); }
+.metric strong { color: #eef6fd; }
+.all-icon { background: #163d39; color: #70e7d2; }
+.tanker-icon { background: #3b3020; color: #f2bd6b; }
+.motion-icon { background: #1a324e; color: #8ec0ff; }
+.favorite-icon { background: #302844; color: #d1afea; }
+.data-notice { color: #c6bd9f; }
+.time-controls { background: var(--night-panel); border-color: var(--night-border); }
+.time-row label, .compact-label, .time-row>span, .export-period { color: var(--night-muted); }
+.time-row input, .compact-label select { background: var(--night-input); color: var(--night-text); border-color: var(--night-border); }
+.monitor { background: var(--night-panel); border-color: var(--night-border); box-shadow: 0 15px 45px #0004; }
+.sidebar { background: var(--night-panel); }
+.count-badge { color: #b6d5e3; background: #213747; }
+.search { background: var(--night-input); border-color: var(--night-border); }
+.search input { color: var(--night-text); }
+.search input::placeholder, .search>span { color: #91a8ba; }
+.search kbd { border-color: #3b5163; color: #9fb6c8; }
+.search:focus-within { border-color: #52d7c2; box-shadow: 0 0 0 2px #52d7c218; }
+.tabs button { color: #a6bbca; }
+.tabs button.active { color: #6ce5d0; }
+.filter-fields>label, .filter-row label, .filter-fields .checkbox-label, .area-label { color: var(--night-muted); }
+.filter-fields select, .filter-fields input:not([type=checkbox]) { background: var(--night-input); border-color: var(--night-border); color: var(--night-text); }
+.text-button { color: #71e2d0; }
+.list-heading { color: #98b0c2; }
+.vessel-list { scrollbar-color: #3a5368 #101c29; }
+.vessel-row { color: #dfebf5; background: var(--night-panel); border-bottom-color: #203344; }
+.vessel-row:hover { background: #1a2e3e; }
+.vessel-row.selected { background: #183e40; border-left-color: #63e2ce; }
+.vessel-info small, .row-speed, .row-speed small { color: #abc0cf; }
+.sidebar-footer { background: #0d1925; color: var(--night-muted); }
+.empty-state { color: var(--night-muted); }
+.map-toolbar { background: #102333; border-color: var(--night-border); }
+.map-context { color: #a5becd; border-color: #3a5366; }
+.map-toolbar .map-reset { background: #1b3446; color: #dcecf6; border-color: #3b586c; }
+.coverage-bar { background: #122736; color: #aec7d6; border-color: var(--night-border); }
+.map-wrapper, #map { background: #102433; }
+/* Keep the existing OpenStreetMap source; only its raster tile pane is toned. */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) saturate(.55) brightness(.76) contrast(.94); }
+.map-wrapper::after { box-shadow: inset 0 0 90px #08121d40; }
+.leaflet-control-zoom { border-color: #365168!important; box-shadow: 0 4px 20px #0005!important; }
+.leaflet-control-zoom a { background: #162b3b!important; color: #dcecf7!important; border-color: #365168!important; }
+.leaflet-control-zoom a:hover { background: #254254!important; }
+.leaflet-control-attribution { background: #0c1b28ed!important; color: #bacbd8!important; }
+.leaflet-control-attribution a { color: #86d8ed; }
+.leaflet-tooltip { background: #132a3a; color: #e6f2fa; border: 1px solid #426276; box-shadow: 0 5px 24px #0006; }
+.leaflet-tooltip-top::before { border-top-color: #426276; }
+.leaflet-tooltip-bottom::before { border-bottom-color: #426276; }
+.map-caption { background: #112737ed!important; color: #c4d9e7!important; border-color: #3a5569; box-shadow: 0 4px 20px #0004!important; }
+.crosshair { color: #67dfca; }
+.map-footer { background: #0e1b27; border-top: 1px solid var(--night-border); }
+.legend>span, #last-sync { color: #abc0cf; }
+.dot.aircraft { background: #6cb5ff; }
+.dot.fishing { background: #4ed7ae; }
+.dot.tug { background: #ee9471; }
+.dot.passenger { background: #d49ae9; }
+.dot.sailing { background: #6bc9eb; }
+.dot.pleasure { background: #f391bc; }
+.object-symbol { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ship-color); transform: rotate(var(--heading)); transform-origin: center; filter: drop-shadow(0 2px 2px #000a); }
+.object-symbol svg { width: 24px; height: 32px; display: block; overflow: visible; }
+.ship-marker.selected { background: #52d7c21c!important; border-radius: 50%!important; box-shadow: 0 0 0 5px #52d7c22b, 0 0 0 1px #7ef2de!important; }
+.ship-marker:focus-visible { outline: 2px solid #e1fff9; outline-offset: 5px; border-radius: 50%; }
+.vessel-modal { color: var(--night-text); background: #111f2d; border-color: #3c566b; box-shadow: 0 30px 110px #0009; }
+.vessel-modal::backdrop { background: #030b15c4; }
+.vessel-modal .detail-top { background: linear-gradient(120deg, #123144, #1c494d); }
+.vessel-modal .detail-status { color: #7ee1c7; border-color: var(--night-border); }
+.vessel-modal .detail-status small { color: var(--night-muted); }
+.vessel-modal .detail-numbers { border-color: var(--night-border); }
+.vessel-modal .detail-numbers>div { background: #192e3f; }
+.vessel-modal .detail-numbers strong { color: #f0f8fe; }
+.vessel-modal .detail-numbers span, .vessel-modal .detail-numbers em { color: #abc3d3; }
+.vessel-modal .detail-info dt { color: #a2b8c9; }
+.vessel-modal .detail-info dd { color: #e1eef8; }
+.history-callout { background: #123335; border-color: #2c5c59; }
+.history-callout h3 { color: #e2fff7; }
+.history-callout p, .history-callout label, .history-callout>small { color: #afd0cb; }
+.vessel-modal .history-callout .detail-kicker { color: #7de4cc; }
+.history-callout select { background: #0b2429; color: #e1fff9; border-color: #45716d; }
+.vessel-modal .detail-note { color: #a1b6c6; }
+.track-panel { background: #122939f5; border-color: #3b5b6e; color: #e6f3fb; box-shadow: 0 8px 30px #0006; }
+.track-panel .eyebrow { color: #7ce5cf; }
+.track-panel p { color: #b5cddd; }
+.map-warning { color: #f1d5a3; background: #382d1c; border-color: #806438; }
+.toast { background: #1b3e48; color: #ecfffb; border: 1px solid #3e6e78; box-shadow: 0 8px 30px #0006; }
+
+/* Registry uses its own layout and the same night surfaces. */
+.registry-page { font-family: system-ui, sans-serif; }
+.registry-page p, .registry-page small { color: var(--night-muted); }
+.registry-page a { color: #79dccc; }
+.registry-page button { background: #52d7c2; color: #08211e; font-weight: 600; }
+.registry-page button:hover { background: #7be7d6; }
+.registry-page input, .registry-page select, .registry-page textarea { background: var(--night-input); color: var(--night-text); border-color: #365065; }
+.registry-page .table-wrap { background: var(--night-panel); border-color: var(--night-border); border-radius: 12px; }
+.registry-page th { background: #1b3042; color: #dcebf5; }
+.registry-page td { background: var(--night-panel); color: #d4e5f1; }
+.registry-page th, .registry-page td { border-color: var(--night-border); }
+.registry-page tbody tr:hover td { background: #1a2e3e; }
+.registry-page .badge { background: #17443f; color: #a2f2de; }
+.registry-page #diagnostics { background: #101f2d; border-color: var(--night-border); }
+.registry-page dialog { background: #132333; color: var(--night-text); border-color: #3b576d; box-shadow: 0 24px 90px #0009; }
+.registry-page dialog::backdrop { background: #030b15c4; backdrop-filter: blur(5px); }
+.registry-page #cancel { background: #223c4f; color: #dceaf4; }
+
+/* Type-specific miniatures keep a north-facing bow and rotate as one object. */
+.object-symbol svg { width: 28px; height: 44px; }
+.ship-marker.aircraft .object-symbol svg { width: 30px; height: 44px; }
+/* Scale only map markers; larger illustrations in vessel dialogs stay fixed. */
+#map .ship-marker {
+  width: var(--map-marker-width, 34px)!important;
+  height: var(--map-marker-height, 46px)!important;
+  margin-left: calc(var(--map-marker-width, 34px) / -2)!important;
+  margin-top: calc(var(--map-marker-height, 46px) / -2)!important;
+}
+#map .object-symbol svg {
+  width: var(--map-symbol-width, 28px);
+  height: var(--map-symbol-height, 44px);
+}
+#map .ship-marker.aircraft .object-symbol svg { width: var(--map-aircraft-width, 30px); }
+.vessel-modal .detail-top { padding-right: 120px; min-height: 172px; }
+.detail-vessel-portrait { position: absolute; right: 25px; bottom: 6px; width: 72px; height: 122px; pointer-events: none; }
+.detail-vessel-portrait .object-symbol { transform: rotate(18deg); filter: drop-shadow(0 5px 5px #0006); }
+.detail-vessel-portrait .object-symbol svg { width: 65px; height: 114px; }
+@media(max-width:600px) {
+ .vessel-modal .detail-top { padding-right: 102px; min-height: 155px; }
+ .detail-vessel-portrait { right: 19px; width: 58px; height: 106px; }
+ .detail-vessel-portrait .object-symbol svg { width: 55px; height: 96px; }
+}

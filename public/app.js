@@ -2,7 +2,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const TYPES = {aircraft:"Aeronave",tanker:"Tanker · navio-tanque",gas:"Gaseiro · LNG / LPG",container:"Porta-contêineres",bulk:"Graneleiro",cargo:"Carga geral",fishing:"Pesca",tug:"Rebocador / reboque",passenger:"Passageiros",sailing:"Veleiro",pleasure:"Embarcação de recreio",other:"Outros",unknown:"Não informado"};
-const COLORS = {aircraft:"#3486d9",tanker:"#e09b3b",gas:"#25a39b",container:"#4585cf",bulk:"#a477c5",cargo:"#638878",fishing:"#16806a",tug:"#b55a38",passenger:"#9254a5",sailing:"#277b96",pleasure:"#c04f83",other:"#80929d",unknown:"#80929d"};
+const COLORS = {aircraft:"#6cb5ff",tanker:"#f2b65b",gas:"#52d8cc",container:"#74abf5",bulk:"#c29be7",cargo:"#8ac7a8",fishing:"#4ed7ae",tug:"#ee9471",passenger:"#d49ae9",sailing:"#6bc9eb",pleasure:"#f391bc",other:"#a8bacb",unknown:"#a8bacb"};
 const state = {objects:[],selected:null,favorites:new Set(),favoritesOnly:false,markers:new Map(),source:"demo",at:null,area:null,drawing:false,corner:null,total:0,detailOpen:false,showTrack:false,trackHours:6,trackStatus:"",trackPoints:[]};
 let map, areaLayer, trackLayer, toastTimer, queryTimer, request, generation=0, trajectoryGeneration=0, coverageGeneration=0, hasLoaded=false;
 const key = object => `${object.source}:${object.object_id}`;
@@ -34,6 +34,8 @@ function readDate(id) {
 function initMap() {
   if(!window.L){$("map-warning").textContent="Não foi possível carregar o mapa. Verifique a conexão; a lista continua disponível.";$("map-warning").hidden=false;for(const id of ["bounds-filter","world-view","draw-area","go-coordinates","check-coverage"])$(id).disabled=true;return;}
   map=L.map("map",{zoomControl:false,minZoom:2,maxZoom:18,maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1}).setView([15,12],2);
+  updateMarkerScale();
+  map.on("zoomend",updateMarkerScale);
   L.control.zoom({position:"bottomright"}).addTo(map);
   const tiles=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,noWrap:true,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).addTo(map);
   tiles.on("tileerror",()=>{$("map-warning").textContent="Mapa-base indisponível. A lista e os marcadores continuam disponíveis.";$("map-warning").hidden=false;});
@@ -78,6 +80,21 @@ function filterParams() {
   return params;
 }
 function visibleObjects() {return state.objects.filter(v=>!state.favoritesOnly || state.favorites.has(key(v)) || state.favorites.has(v.object_id));}
+function updateMarkerScale(){
+  if(!map)return;
+  const height=Math.round(Math.max(16,Math.min(44,16+(map.getZoom()-2)*28/12)));
+  const width=Math.round(height*28/44),aircraftWidth=Math.round(height*30/44);
+  const style=map.getContainer().style;
+  style.setProperty('--map-symbol-height',height+'px');
+  style.setProperty('--map-symbol-width',width+'px');
+  style.setProperty('--map-aircraft-width',aircraftWidth+'px');
+  style.setProperty('--map-marker-width',(aircraftWidth+6)+'px');
+  style.setProperty('--map-marker-height',(height+2)+'px');
+}
+function markerSymbol(object,heading){
+  const type=object.object_type==="aircraft"?'aircraft':kind(object);
+  return `<span class="object-symbol" style="--ship-color:${COLORS[type]};--heading:${heading}deg">${window.MVisionIcons.svg(type)}</span>`;
+}
 function selectObject(id,focus=true) {
   const object=state.objects.find(v=>key(v)===id);if(!object)return;
   if(state.selected!==id){state.showTrack=false;clearTrajectory();}
@@ -99,7 +116,7 @@ function render() {
       const id=key(object);let marker=state.markers.get(id);
       if(!marker){marker=L.marker([object.latitude,object.longitude],{keyboard:true,title:object.name}).addTo(map);marker.on("click",()=>{if(!state.drawing)selectObject(id,false);});state.markers.set(id,marker);}
       const heading=Number.isFinite(object.heading)?object.heading:Number.isFinite(object.course)?object.course:0;
-      marker.setLatLng([object.latitude,object.longitude]).setIcon(L.divIcon({className:`ship-marker ${object.object_type==="aircraft"?"aircraft":""} ${state.selected===id?"selected":""}`,html:`<span class="ship-pointer" style="--ship-color:${COLORS[kind(object)]};--heading:${heading}deg"></span>`,iconSize:[24,24],iconAnchor:[12,12]}));
+      marker.setLatLng([object.latitude,object.longitude]).setIcon(L.divIcon({className:`ship-marker ${object.object_type==="aircraft"?"aircraft":"vessel"} ${state.selected===id?"selected":""}`,html:markerSymbol(object,heading),iconSize:[34,46],iconAnchor:[17,23]}));
       marker.setZIndexOffset(state.selected===id?1000:0);
       const tooltip=`<strong>${escapeHTML(object.name)}</strong><br>${TYPES[kind(object)]} · ${fmt(object.speed)} kn<br>${escapeHTML(ageLabel(object.updated_at))}`;
       if(marker.getTooltip())marker.setTooltipContent(tooltip);else marker.bindTooltip(tooltip,{direction:"top",offset:[0,-10]});
@@ -115,7 +132,7 @@ function renderDetail() {
   const fields=[["Identificador",v.object_id],["Fonte",v.source],["IMO",v.imo],["Indicativo",v.callsign],["Latitude",fmt(v.latitude,4)+"°"],["Longitude",fmt(v.longitude,4)+"°"],
     [v.object_type==="aircraft"?"Altitude":"Comprimento",v.object_type==="aircraft"?fmt(v.altitude,0)+" m":fmt(v.length,0)+" m"],...(v.object_type==="aircraft"?[]:[["Largura",fmt(v.width,0)+" m"],["Destino informado",v.destination||"Não informado"]]),["Horário da posição",dateLabel(v.updated_at)],["Posição coletada",dateLabel(v.position_collected_at)],["Última coleta",dateLabel(v.collected_at)],["Horário original",dateLabel(v.event_at)]];
   const active=document.activeElement?.id;
-  dialog.innerHTML=`<div class="detail-top"><button class="close-detail" aria-label="Fechar detalhes" autofocus>×</button><p class="detail-kicker">${v.object_type==="aircraft"?"AERONAVE":"EMBARCAÇÃO"} / VISÃO GERAL</p><h2 id="detail-title">${escapeHTML(v.name||v.object_id)}</h2><span class="type-label"><i class="dot ${kind(v)}"></i>${TYPES[kind(v)]}</span></div><div class="detail-body"><div class="detail-status"><span>${escapeHTML(v.status||"Status não informado")}</span><small>${escapeHTML(ageLabel(v.updated_at))}${state.at?" do horário consultado":""}</small></div><div class="detail-numbers"><div><span>Velocidade</span><strong>${fmt(v.speed)}</strong><em>kn</em></div><div><span>Rumo</span><strong>${fmt(v.course,0)}</strong><em>°</em></div></div><div class="detail-info"><dl>${fields.map(([label,value])=>`<dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd>`).join("")}</dl></div><div class="history-callout"><div><span class="detail-kicker">CAMINHO PERCORRIDO</span><h3>Histórico de movimentação</h3><p>Explore as posições recebidas. Intervalos sem dados aparecem como lacunas.</p></div><label>Período<select id="track-hours">${[[6,"Últimas 6 horas"],[24,"Últimas 24 horas"],[168,"Últimos 7 dias"],[720,"Últimos 30 dias"]].map(([hours,label])=>`<option value="${hours}" ${state.trackHours===hours?"selected":""}>${label}</option>`).join("")}</select></label><button class="button primary" id="show-history">↗ Visualizar histórico no mapa</button>${state.at?'<small>Período termina no horário histórico consultado.</small>':''}</div><div class="detail-actions"><button class="button ${favorite?"primary":"secondary"}" id="favorite-object" aria-pressed="${favorite}">${favorite?"★ Remover dos favoritos":"☆ Adicionar aos favoritos"}</button><p class="detail-note">${v.source==="demo"?"Demonstração: identificadores e posições são fictícios.":v.timestamp_basis==="collection"?"O horário original não foi informado; usamos o recebimento da posição.":"A posição usa o horário informado pela fonte."}</p></div></div>`;
+  dialog.innerHTML=`<div class="detail-top"><div class="detail-vessel-portrait" role="img" aria-label="${escapeHTML(TYPES[kind(v)])}">${markerSymbol(v,0)}</div><button class="close-detail" aria-label="Fechar detalhes" autofocus>×</button><p class="detail-kicker">${v.object_type==="aircraft"?"AERONAVE":"EMBARCAÇÃO"} / VISÃO GERAL</p><h2 id="detail-title">${escapeHTML(v.name||v.object_id)}</h2><span class="type-label"><i class="dot ${kind(v)}"></i>${TYPES[kind(v)]}</span></div><div class="detail-body"><div class="detail-status"><span>${escapeHTML(v.status||"Status não informado")}</span><small>${escapeHTML(ageLabel(v.updated_at))}${state.at?" do horário consultado":""}</small></div><div class="detail-numbers"><div><span>Velocidade</span><strong>${fmt(v.speed)}</strong><em>kn</em></div><div><span>Rumo</span><strong>${fmt(v.course,0)}</strong><em>°</em></div></div><div class="detail-info"><dl>${fields.map(([label,value])=>`<dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd>`).join("")}</dl></div><div class="history-callout"><div><span class="detail-kicker">CAMINHO PERCORRIDO</span><h3>Histórico de movimentação</h3><p>Explore as posições recebidas. Intervalos sem dados aparecem como lacunas.</p></div><label>Período<select id="track-hours">${[[6,"Últimas 6 horas"],[24,"Últimas 24 horas"],[168,"Últimos 7 dias"],[720,"Últimos 30 dias"]].map(([hours,label])=>`<option value="${hours}" ${state.trackHours===hours?"selected":""}>${label}</option>`).join("")}</select></label><button class="button primary" id="show-history">↗ Visualizar histórico no mapa</button>${state.at?'<small>Período termina no horário histórico consultado.</small>':''}</div><div class="detail-actions"><button class="button ${favorite?"primary":"secondary"}" id="favorite-object" aria-pressed="${favorite}">${favorite?"★ Remover dos favoritos":"☆ Adicionar aos favoritos"}</button><p class="detail-note">${v.source==="demo"?"Demonstração: identificadores e posições são fictícios.":v.timestamp_basis==="collection"?"O horário original não foi informado; usamos o recebimento da posição.":"A posição usa o horário informado pela fonte."}</p></div></div>`;
   dialog.querySelector(".close-detail").addEventListener("click",()=>{state.detailOpen=false;dialog.close();});
   $("track-hours").addEventListener("change",()=>{state.trackHours=Number($("track-hours").value);});
   $("show-history").addEventListener("click",()=>{state.detailOpen=false;dialog.close();state.showTrack=true;loadTrajectory(true);});
@@ -151,10 +168,10 @@ async function loadTrajectory(fit=false) {
     if(segment.length>1)segments.push(segment);
     state.trackPoints=points;
     if(map){
-      const layers=segments.flatMap(s=>[L.polyline(s.map(p=>[p.latitude,p.longitude]),{color:"#fff",weight:7,opacity:.85}),L.polyline(s.map(p=>[p.latitude,p.longitude]),{color:"#087e8b",weight:3,opacity:1})]);
+      const layers=segments.flatMap(s=>[L.polyline(s.map(p=>[p.latitude,p.longitude]),{color:"#07131e",weight:7,opacity:.9}),L.polyline(s.map(p=>[p.latitude,p.longitude]),{color:"#59dfcb",weight:3,opacity:1})]);
       if(points.length){
-        for(const [point,label,color] of [[points[0],"Primeiro registro do período","#087e8b"],[points.at(-1),"Último registro do período","#dc8b32"]]){
-          layers.push(L.circleMarker([point.latitude,point.longitude],{radius:6,color:"#fff",weight:2,fillColor:color,fillOpacity:1}).bindTooltip(`${label}<br>${escapeHTML(dateLabel(point.updated_at))}`));
+        for(const [point,label,color] of [[points[0],"Primeiro registro do período","#59dfcb"],[points.at(-1),"Último registro do período","#f2b65b"]]){
+          layers.push(L.circleMarker([point.latitude,point.longitude],{radius:6,color:"#e3f0f7",weight:2,fillColor:color,fillOpacity:1}).bindTooltip(`${label}<br>${escapeHTML(dateLabel(point.updated_at))}`));
         }
       }
       trackLayer=L.layerGroup(layers).addTo(map);
