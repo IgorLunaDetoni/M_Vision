@@ -22,6 +22,7 @@ A demonstração usa apenas a biblioteca padrão do Python. Leaflet, fontes e ti
 - Consulta de uma data/hora nos últimos 30 dias: mostra o último estado conhecido e coletado até aquele instante, sem usar nomes/metadados recebidos no futuro e sem interpolar posições.
 - Exportação **CSV ou XLSX**, com seleção de dados **tratados ou brutos**, obedecendo aos filtros. Sem período, exporta o mapa consultado; com início/fim, exporta as observações **coletadas** no intervalo, inclusive múltiplas observações do mesmo objeto.
 - Favoritos no navegador. Atualização automática do mapa a cada 50 segundos; botão Atualizar para consulta imediata. No histórico, o horário consultado permanece fixo.
+- No topo do mapa, **Último recebimento da API** mostra a data/hora local da mensagem de rastreamento mais recente recebida pelo servidor. É verificado a cada 10 segundos, inclusive no histórico, e independe dos filtros ou do horário em que a tela foi consultada. Inclui mensagens brutas sem posição válida, preserva o horário entre reinicializações e não conta demonstração/importações normalizadas como recebimento real. O detalhe ao passar o mouse mostra os horários por fonte.
 
 Os campos de data da interface usam o fuso do navegador; armazenamento e detalhes usam UTC. O histórico começa com a coleta: períodos com o computador desligado terão lacunas. Na demonstração, consultar antes da primeira inicialização devolve uma consulta vazia.
 
@@ -161,6 +162,7 @@ Se a falha persistir mesmo com `truststore`, confira a data/hora e a cadeia de c
 - `POST /api/registry`: edição manual em JSON `{ "mmsi": "...", "fields": { "model": "...", "manufacturer": "...", "vessel_class": "...", "notes": "...", "source_url": "https://..." } }`.
 
 - `GET /api/objects`: posição atual ou `at` em ISO 8601 com fuso. Aceita `q`, `source`, `object_type`, `type`, `size`, `motion`, `ids` separados por vírgula e `bounds=sul,oeste,norte,leste`.
+- `GET /api/receipts`: `last_received_at` e `last_received_by_source`, em UTC, da recepção real de mensagens de rastreamento. Os mesmos campos acompanham `/api/objects`. Sem mensagens reais, o horário é `null`; o horário de consulta da API não o substitui.
 - `GET /api/vessels`: compatibilidade com a camada marítima.
 - `GET /api/trajectory?object_id=...&source=...&hours=6`: posições coletadas no intervalo, até o horário `at` opcional.
 - `GET /api/export`: mesmos filtros, `format=csv|xlsx`, `dataset=raw|treated`, `start`/`end` opcionais em ISO 8601 com fuso. O período considera o horário da coleta.

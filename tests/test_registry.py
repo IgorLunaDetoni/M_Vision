@@ -158,6 +158,13 @@ class RegistryTests(unittest.TestCase):
                 coverage = json.load(response)
                 self.assertEqual(coverage['total'], 0)  # Static-only fixture has no position.
                 self.assertTrue(coverage['subscription_contains_area'])
+            self.store.ingest('aisstream', {'MessageType': 'ShipStaticData'}, [], '2026-11-05T12:00:00+00:00')
+            with urlopen(base + '/api/objects?q=does-not-exist') as response:
+                objects = json.load(response)
+            self.assertEqual(objects['objects'], [])
+            self.assertEqual(objects['last_received_at'], '2026-11-05T12:00:00.000000+00:00')
+            with urlopen(base + '/api/receipts') as response:
+                self.assertEqual(json.load(response)['last_received_at'], objects['last_received_at'])
             body = json.dumps({'mmsi': '123456789', 'fields': {'model': 'Teste'}}).encode()
             request = Request(base + '/api/registry', body, {'Content-Type': 'application/json', 'Origin': base})
             with urlopen(request) as response:

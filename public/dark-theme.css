@@ -75,6 +75,11 @@ h1 { color: #f1f6fb; }
 .map-context { color: #a5becd; border-color: #3a5366; }
 .map-toolbar .map-reset { background: #1b3446; color: #dcecf6; border-color: #3b586c; }
 .coverage-bar { background: #122736; color: #aec7d6; border-color: var(--night-border); }
+.map-api-update { display:flex;align-items:center;flex-wrap:wrap;gap:7px 14px;padding:11px 18px;background:#102c32;border-bottom:1px solid #28535a;flex-shrink:0; }
+.api-update-label { color:#a9d4cf;font-size:10px; }
+#last-api-received { color:#8af0d7;font-size:12px;font-weight:650;font-variant-numeric:tabular-nums; }
+#api-update-note { color:#9cb7c6;font-size:9px; }
+@media(max-width:600px){.map-api-update{gap:5px 10px;padding:10px 14px}#api-update-note{flex-basis:100%}}
 .map-wrapper, #map { background: #102433; }
 /* Keep the existing OpenStreetMap source; only its raster tile pane is toned. */
 .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) saturate(.55) brightness(.76) contrast(.94); }

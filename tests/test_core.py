@@ -11,7 +11,7 @@ from urllib.request import urlopen
 from app import create_server
 from mvision.ais import collect, normalize, parse_boxes, vessel_type
 from mvision.demo import demo_vessels
-from mvision.store import VesselStore, matches
+from mvision.store import VesselStore, matches, stamp
 
 
 def position(**fields):
@@ -132,6 +132,37 @@ class PersistenceTests(unittest.TestCase):
         self.store.close()
         self.temp.cleanup()
 
+    def test_api_receipts_include_raw_packets_and_survive_restart(self):
+        old = datetime.now(timezone.utc)-timedelta(hours=1)
+        newer = old+timedelta(minutes=10)
+        newest = old+timedelta(minutes=20)
+        self.assertIsNone(self.store.receipt_status()['last_received_at'])
+        self.store.ingest('aisstream', position(), [normalize(position(), old)], old)
+        self.store.ingest('aisstream', {'MessageType': 'ShipStaticData'}, [], newer)
+        self.store.ingest('opensky', {'states': []}, [], newest)
+        self.store.ingest('demo', {'demo': True}, [])
+        self.store.upsert(normalize(position()))  # Normalized-only imports are not API receipts.
+        expected = {'last_received_at': stamp(newest),
+                    'last_received_by_source': {'aisstream': stamp(newer), 'opensky': stamp(newest)}}
+        self.assertEqual(self.store.receipt_status(), expected)
+        self.store.close()
+        self.store = VesselStore(self.path)
+        self.assertEqual(self.store.receipt_status(), expected)
+        self.store.ingest('aisstream', {}, [], old)
+        self.assertEqual(self.store.receipt_status(), expected)
+
+    def test_receipts_migrate_from_packets_without_using_import_timestamps(self):
+        received = datetime.now(timezone.utc)-timedelta(hours=1)
+        self.store.ingest('aisstream', position(), [], received)
+        self.store.upsert(normalize(position()))
+        self.store.flush()
+        with self.store.db:
+            self.store.db.execute('DELETE FROM source_receipts')
+            self.store.db.execute("DELETE FROM settings WHERE key='source_receipts_migrated'")
+        self.store.close()
+        self.store = VesselStore(self.path)
+        self.assertEqual(self.store.receipt_status()['last_received_at'], stamp(received))
+
     def test_area_coverage_includes_all_sizes_and_distinguishes_recent_positions(self):
         now = datetime.now(timezone.utc)
         for identity, length, hours in (('123456789', 120, 0), ('223456789', 15, 2), ('323456789', None, 48)):
@@ -209,6 +240,11 @@ class HTTPTests(unittest.TestCase):
             payload = json.load(response)
         self.assertEqual(payload["source"], "demo")
         self.assertEqual(len(payload["vessels"]), 36)
+        self.assertIsNone(payload['last_received_at'])
+        with urlopen(self.base + '/api/receipts') as response:
+            receipt = json.load(response)
+        self.assertEqual(receipt['source'], 'demo')
+        self.assertIsNone(receipt['last_received_at'])
         self.assertTrue(all(v["mmsi"].startswith("DEMO-") for v in payload["vessels"]))
         for asset in ("/", "/styles.css", "/app.js"):
             with urlopen(self.base + asset) as response:

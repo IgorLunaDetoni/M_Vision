@@ -120,6 +120,8 @@ def create_server(port=8000, source="demo", store=None, interval=300):
             first = lambda key, default=None: params.get(key, [default])[0]
             filters = query_filters(params)
             at = first("at")
+            if path == '/api/receipts':
+                return self.respond(json.dumps(dict(store.receipt_status(), source=source), ensure_ascii=False).encode())
             if path == '/api/coverage':
                 bounds = filters.get('bounds')
                 if not bounds:
@@ -154,6 +156,7 @@ def create_server(port=8000, source="demo", store=None, interval=300):
                     raise ValueError("Limite inválido.")
                 rows, total = store.snapshot(limit=limit, at=at, filters=filters)
                 payload = {"source": source, "connection": store.connection, "connections": store.connections,
+                           **store.receipt_status(),
                            "objects": rows, "vessels": rows, "total": total, "truncated": total > len(rows),
                            "served_at": stamp(), "reference_at": at, "retention_days": store.retention_days,
                            "refresh_seconds": 50, "storage_error": store.storage_error}

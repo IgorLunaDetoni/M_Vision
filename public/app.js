@@ -5,6 +5,7 @@ const TYPES = {aircraft:"Aeronave",tanker:"Tanker · navio-tanque",gas:"Gaseiro 
 const COLORS = {aircraft:"#6cb5ff",tanker:"#f2b65b",gas:"#52d8cc",container:"#74abf5",bulk:"#c29be7",cargo:"#8ac7a8",fishing:"#4ed7ae",tug:"#ee9471",passenger:"#d49ae9",sailing:"#6bc9eb",pleasure:"#f391bc",other:"#a8bacb",unknown:"#a8bacb"};
 const state = {objects:[],selected:null,favorites:new Set(),favoritesOnly:false,markers:new Map(),source:"demo",at:null,area:null,drawing:false,corner:null,total:0,detailOpen:false,showTrack:false,trackHours:6,trackStatus:"",trackPoints:[]};
 let map, areaLayer, trackLayer, toastTimer, queryTimer, request, generation=0, trajectoryGeneration=0, coverageGeneration=0, hasLoaded=false;
+let receiptRequestRunning=false,lastApiReceipt=null;
 const key = object => `${object.source}:${object.object_id}`;
 try {const saved=JSON.parse(localStorage.getItem("mvision:favorites") || "[]");if(Array.isArray(saved))state.favorites=new Set(saved.filter(v=>typeof v==="string").map(v=>v.includes(":")?v:`${v.startsWith("DEMO-")?"demo":"aisstream"}:${v}`));} catch {}
 const escapeHTML = value => String(value ?? "—").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -19,6 +20,27 @@ function ageLabel(value) {
 }
 function notify(message) {$("toast").textContent=message;$("toast").hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("toast").hidden=true,5000);}
 function clockTick() {$("clock").textContent=new Date().toLocaleTimeString("pt-BR",{timeZone:"UTC"})+" UTC";}
+const receiptDate=value=>new Date(value).toLocaleString('pt-BR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',timeZoneName:'short'});
+function renderReceipt(data){
+  const time=$("last-api-received"),note=$("api-update-note");
+  if(data.source==='demo'){
+    time.textContent='Modo demonstração';time.removeAttribute('datetime');time.title='';
+    note.textContent='Sem recebimento de API real';return;
+  }
+  if(data.last_received_at && Number.isFinite(Date.parse(data.last_received_at)) && (!lastApiReceipt || Date.parse(data.last_received_at)>Date.parse(lastApiReceipt)))lastApiReceipt=data.last_received_at;
+  if(lastApiReceipt){time.dateTime=lastApiReceipt;time.textContent=receiptDate(lastApiReceipt);}
+  else {time.textContent='Nenhum dado recebido';time.removeAttribute('datetime');}
+  time.title=Object.entries(data.last_received_by_source||{}).filter(([,date])=>Number.isFinite(Date.parse(date))).map(([source,date])=>`${source}: ${receiptDate(date)}`).join('\n');
+  note.textContent='Horário local · fontes de rastreamento';
+}
+async function loadReceipts(){
+  if(receiptRequestRunning)return;receiptRequestRunning=true;
+  try{
+    const response=await fetch('/api/receipts',{signal:AbortSignal.timeout(8000),cache:'no-store'});
+    if(!response.ok)throw Error();renderReceipt(await response.json());
+  }catch{$('api-update-note').textContent='Sem resposta do servidor · último recebimento conhecido';}
+  finally{receiptRequestRunning=false;}
+}
 clockTick();setInterval(clockTick,1000);
 const localInput = date => new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,19);
 function setDateLimits() {
@@ -191,7 +213,7 @@ async function loadData(manual=false) {
     $("source-badge").textContent=data.source==="demo"?"Modo demonstração":Object.entries(data.connections).map(([source,status])=>`${source}: ${labels[status] || status}`).join(" · ") || "Aguardando fontes";
     $("data-notice").textContent=(data.source==="demo"?"DEMONSTRAÇÃO · 36 embarcações e 6 aeronaves fictícias, em posições fixas. ":"DADOS REAIS · Última posição conhecida; a cobertura depende das fontes. ")+"Histórico de 30 dias coletado enquanto o aplicativo estiver aberto. "+(data.truncated?`Mapa limitado aos ${data.objects.length.toLocaleString("pt-BR")} objetos mais recentes de ${data.total.toLocaleString("pt-BR")}; filtre a área. A exportação inclui todos os resultados. `:"")+(data.storage_error?"Falha no armazenamento local; verifique o disco.":"");
     $("history-label").textContent=state.at?"Histórico · "+new Date(state.at).toLocaleString("pt-BR"):"Agora · últimas posições conhecidas";
-    $("last-sync").textContent="Consulta às "+new Date().toLocaleTimeString("pt-BR");hasLoaded=true;render();if(state.selected && state.showTrack)loadTrajectory();if(manual)notify("Consulta atualizada.");
+    renderReceipt(data);$("last-sync").textContent="Tela consultada em "+receiptDate(data.served_at);hasLoaded=true;render();if(state.selected && state.showTrack)loadTrajectory();if(manual)notify("Consulta atualizada.");
   }catch(error){if(ticket!==generation)return;$("source-badge").textContent="Consulta indisponível";$("data-notice").textContent=hasLoaded?"Falha na consulta. Os dados exibidos pertencem à consulta anterior. Clique em Atualizar para tentar novamente.":"Não foi possível carregar os objetos. Verifique o servidor local e clique em Atualizar.";if(manual)notify(error.name==="AbortError"?"Tempo de consulta excedido.":"Falha na consulta ao servidor.");}
   finally{clearTimeout(timeout);if(ticket===generation)$("refresh").disabled=false;}
 }
@@ -225,4 +247,4 @@ $("export").addEventListener("click",async()=>{
   }catch(error){notify(error.message || "Falha na exportação.");}finally{button.disabled=false;}
 });
 if(window.innerWidth<=600)document.querySelector(".filters").open=false;
-initMap();loadData();setInterval(()=>{if(!state.at)loadData();},50000);
+initMap();loadData();loadReceipts();setInterval(loadReceipts,10000);setInterval(()=>{if(!state.at)loadData();},50000);

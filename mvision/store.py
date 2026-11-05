@@ -74,6 +74,7 @@ class VesselStore:
             CREATE TABLE IF NOT EXISTS outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL, body TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS file_offsets (path TEXT PRIMARY KEY, size INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS source_receipts (source TEXT PRIMARY KEY, received_at TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS latest_state (
                 source TEXT NOT NULL, object_id TEXT NOT NULL, collected_at TEXT NOT NULL,
                 position_at TEXT, payload TEXT NOT NULL, PRIMARY KEY(source, object_id));
@@ -83,6 +84,14 @@ class VesselStore:
                 SELECT *, ROW_NUMBER() OVER (PARTITION BY source, object_id ORDER BY collected_at DESC, seq DESC) AS n
                 FROM observations) WHERE n=1""")
         self.db.commit()
+        # Recover actual packet receipt times once, including packets without positions.
+        if not self.db.execute("SELECT 1 FROM settings WHERE key='source_receipts_migrated'").fetchone():
+            with self.db:
+                self.db.execute("""INSERT OR IGNORE INTO source_receipts
+                    SELECT source, MAX(collected_at) FROM packets WHERE source<>'demo'
+                    AND COALESCE(json_extract(payload, '$.payload.normalized_only'), 0)=0 GROUP BY source""")
+                self.db.execute("INSERT INTO settings VALUES ('source_receipts_migrated', '1')")
+        self.last_received = dict(self.db.execute('SELECT source, received_at FROM source_receipts'))
         self.connection = "connecting"
         self.connections = {}
         self.storage_error = False
@@ -142,6 +151,8 @@ class VesselStore:
                 self.vessels[identity] = existing
                 records.append(existing)
             self.pending.append((raw, raw_body, records))
+            if source != 'demo' and not (isinstance(packet, dict) and packet.get('normalized_only')):
+                self.last_received[source] = max(self.last_received.get(source, ''), collected_at)
             if len(self.pending) >= 1000:
                 self.flush()
         return raw_id
@@ -159,6 +170,11 @@ class VesselStore:
                         source = raw["source"]
                         self.db.execute("INSERT INTO packets VALUES (?, ?, ?, ?)",
                                         (raw["raw_id"], source, raw["collected_at"], raw_body))
+                        packet = raw['payload']
+                        if source != 'demo' and not (isinstance(packet, dict) and packet.get('normalized_only')):
+                            self.db.execute("""INSERT INTO source_receipts VALUES (?, ?)
+                                ON CONFLICT(source) DO UPDATE SET received_at=MAX(received_at, excluded.received_at)""",
+                                (source, raw['collected_at']))
                         self.db.execute("INSERT INTO outbox(path, body) VALUES (?, ?)",
                                         (f"brutos/{source}/{day}.jsonl", raw_body + "\n"))
                         for record in records:
@@ -208,6 +224,11 @@ class VesselStore:
                 self.db.execute("INSERT OR REPLACE INTO file_offsets VALUES (?, ?)", (relative, size))
             if writes:
                 self.db.execute("DELETE FROM outbox WHERE seq<=?", (writes[-1]["seq"],))
+
+    def receipt_status(self):
+        with self.lock:
+            return {'last_received_at': max(self.last_received.values(), default=None),
+                    'last_received_by_source': dict(self.last_received)}
 
     def snapshot(self, limit=5000, at=None, filters=None):
         reference = instant(at)
