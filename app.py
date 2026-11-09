@@ -1,5 +1,7 @@
 """Run: python app.py. Demo mode uses only the Python standard library."""
 import asyncio
+import base64
+import hashlib
 import json
 import mimetypes
 import os
@@ -20,6 +22,7 @@ from mvision.exports import export_data
 from mvision.enrichment import collect_particulars
 from mvision.diagnostics import diagnose
 from mvision.store import VesselStore, instant, stamp
+from mvision.antaq import MAX_FILE, DEFAULT_SOURCE
 
 ROOT = Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
@@ -81,7 +84,7 @@ def create_server(port=8000, source="demo", store=None, interval=300):
             self.do_GET()
 
         def do_POST(self):
-            if self.path != '/api/registry':
+            if self.path not in ('/api/registry', '/api/registry/antaq/import'):
                 return self.respond(b'{"error":"Not found"}', 404)
             origin = self.headers.get('Origin')
             allowed = {f'http://127.0.0.1:{self.server.server_port}', f'http://localhost:{self.server.server_port}'}
@@ -89,13 +92,35 @@ def create_server(port=8000, source="demo", store=None, interval=300):
                 return self.respond(b'{"error":"Forbidden"}', 403)
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 16000:
+                importing = self.path == '/api/registry/antaq/import'
+                if not 0 < length <= (24*1024*1024 if importing else 16000):
                     raise ValueError('Tamanho inválido.')
                 body = json.loads(self.rfile.read(length))
+                if importing:
+                    filename = body.get('filename')
+                    if not isinstance(filename, str) or len(filename) > 300:
+                        raise ValueError('Nome de arquivo inválido.')
+                    raw = base64.b64decode(body['content'], validate=True)
+                    if len(raw) > MAX_FILE:
+                        raise ValueError('Use um arquivo de até 16 MB.')
+                    committing = body.get('commit') is True
+                    with store.lock:
+                        store.flush()
+                        # Retain the original export before committing its normalized rows.
+                        if committing:
+                            target = store.root/'brutos'/'antaq'/'importacoes'
+                            target.mkdir(parents=True, exist_ok=True)
+                            suffix = Path(filename).suffix.lower()
+                            suffix = suffix if suffix in ('.csv','.xlsx','.html','.htm','.xls','.txt') else '.bin'
+                            (target/(hashlib.sha256(raw).hexdigest()+suffix)).write_bytes(raw)
+                        report = store.registry.antaq.import_file(raw, filename, body.get('source_url') or DEFAULT_SOURCE,
+                                                                 commit=committing)
+                    return self.respond(json.dumps(report, ensure_ascii=False).encode())
                 store.registry.edit(body['mmsi'], body['fields'])
                 return self.respond(b'{"saved":true}')
-            except (ValueError, TypeError, KeyError):
-                return self.respond(json.dumps({'error': 'Cadastro inválido. Revise os campos.'}).encode(), 400)
+            except (ValueError, TypeError, KeyError) as error:
+                message = str(error) if self.path.endswith('/antaq/import') and isinstance(error, ValueError) else 'Cadastro inválido. Revise os campos.'
+                return self.respond(json.dumps({'error': message}).encode(), 400)
             except (OSError, sqlite3.Error):
                 return self.respond(b'{"error":"Storage unavailable"}', 503)
 
@@ -138,14 +163,18 @@ def create_server(port=8000, source="demo", store=None, interval=300):
                 with store.lock:
                     store.flush()
                     report = diagnose(store.db)
+                    report['antaq'] = store.registry.antaq.summary()
                 return self.respond(json.dumps(report, ensure_ascii=False).encode())
+            if path == '/api/registry/antaq':
+                return self.respond(json.dumps(store.registry.antaq.summary(), ensure_ascii=False).encode())
             if path == '/api/registry':
                 limit, offset = int(first('limit', '100')), int(first('offset', '0'))
                 if not 1 <= limit <= 500 or offset < 0:
                     raise ValueError('Paginação inválida.')
                 with store.lock:
                     store.flush()
-                    rows, total = store.registry.list(first('q', ''), first('type', ''), first('status', ''), limit, offset)
+                    rows, total = store.registry.list(first('q', ''), first('type', ''), first('status', ''), limit, offset,
+                                                      origin=first('origin', ''))
                 return self.respond(json.dumps({'vessels': rows, 'total': total, 'limit': limit, 'offset': offset},
                                                ensure_ascii=False).encode())
             if path in ("/api/objects", "/api/vessels"):

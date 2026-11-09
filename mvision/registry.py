@@ -2,6 +2,7 @@
 import json
 import re
 from datetime import datetime, timedelta, timezone
+from mvision.antaq import AntaqRegistry
 
 
 def now():
@@ -23,6 +24,7 @@ class VesselRegistry:
             value TEXT NOT NULL, source_url TEXT NOT NULL, property TEXT NOT NULL,
             first_collected_at TEXT, collected_at TEXT, metadata TEXT NOT NULL,
             PRIMARY KEY (identity, field, source, value, source_url, property))""")
+        self.antaq = AntaqRegistry(self)
         # Backfill only known timestamps; never invent a date for legacy records.
         for record in db.execute('SELECT payload FROM vessel_registry').fetchall():
             item = json.loads(record['payload'])
@@ -30,6 +32,7 @@ class VesselRegistry:
                                        if item.get(k) not in (None, '')}, 'AISStream', None, legacy=True)
             self.record_sources(item, item.get('manual', {}), 'Manual', item.get('manual_updated_at'), legacy=True)
             self.record_sources(item, item.get('enrichment', {}), 'Wikidata', item.get('checked_at'), legacy=True)
+        self.antaq.reconcile()
         db.commit()
 
     def record_sources(self, item, values, source, collected_at, legacy=False):
@@ -88,25 +91,40 @@ class VesselRegistry:
                         (mmsi, json.dumps(row, ensure_ascii=False), status, due))
         self.record_sources(row, {k: item[k] for k in ('name', 'imo', 'callsign', 'type', 'length', 'width', 'destination')
                                   if item.get(k) not in (None, '')}, 'AISStream', item.get('collected_at'))
+        if changed or not existing:
+            self.antaq.reconcile(row)
 
-    def list(self, query='', category='', status='', limit=100, offset=0):
+    def list(self, query='', category='', status='', limit=100, offset=0, origin=''):
         with self.lock:
-            rows = []
+            candidates = []
             for record in self.db.execute('SELECT * FROM vessel_registry ORDER BY mmsi'):
                 item = json.loads(record['payload'])
                 item['crawl_status'] = record['status']
+                item['origin'] = 'aisstream'
+                candidates.append(item)
+            candidates = self.antaq.catalog(candidates)
+            rows = []
+            for item in candidates:
+                if origin == 'antaq' and not item.get('antaq'):
+                    continue
+                if origin == 'aisstream' and item['origin'] != 'aisstream':
+                    continue
+                if origin == 'linked' and item.get('antaq_match') != 'matched':
+                    continue
+                if origin == 'unlinked' and item['origin'] != 'antaq':
+                    continue
                 if category and category != 'all' and item.get('type', 'unknown') != category:
                     continue
-                if status and status != 'all' and record['status'] != status:
+                if status and status != 'all' and item['crawl_status'] != status:
                     continue
                 searchable = ' '.join(str(item.get(key) or '') for key in ('name', 'mmsi', 'imo', 'callsign'))
-                searchable += ' ' + json.dumps([item['manual'], item['enrichment']], ensure_ascii=False)
+                searchable += ' ' + json.dumps([item['manual'], item['enrichment'], item.get('antaq', {})], ensure_ascii=False)
                 if query.casefold() not in searchable.casefold():
                     continue
                 rows.append(item)
             page = rows[offset:offset + limit] if limit is not None else rows[offset:]
             for item in page:
-                item['field_sources'] = self.sources(item)
+                item['field_sources'] = self.sources(item) if item['origin'] == 'aisstream' else item.get('field_sources', {})
                 item['conflicts'] = [key for key, value in item.get('manual', {}).items()
                                      if key not in ('notes', 'source_url') and value
                                      and item.get('enrichment', {}).get(key)

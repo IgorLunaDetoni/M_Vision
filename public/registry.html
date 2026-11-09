@@ -11,14 +11,16 @@
 </head>
 <body class="registry-page">
   <main>
-    <header><div><a href="/">← Voltar ao mapa</a><h1>Cadastro de embarcações</h1></div><button id="refresh">Atualizar tabela</button></header>
+    <header><div><a href="/">← Voltar ao mapa</a><h1>Cadastro de embarcações</h1></div><div class="registry-header-actions"><button id="import-antaq">Importar ANTAQ</button><button id="refresh">Atualizar tabela</button></div></header>
     <p>Cadastro local das embarcações reais identificadas. Dados AIS e informações complementares permanecem separados. Atualização da tabela a cada 50 segundos.</p>
     <p>O coletor consulta o Wikidata por IMO ou MMSI. Campos ausentes permanecem sem informação. Classe/projeto não confirma modelo comercial.</p>
+    <p id="antaq-summary" role="status">Carregando integração ANTAQ…</p>
     <details id="diagnostics"><summary>Carregando diagnóstico…</summary></details>
     <form id="filters">
       <label>Buscar nome, MMSI, IMO ou modelo<input id="query" type="search" placeholder="Identificador ou informação"></label>
       <label>Tipo<select id="type"><option value="">Todos os tipos</option><option value="cargo">Carga</option><option value="tanker">Navio-tanque</option><option value="fishing">Pesca</option><option value="tug">Rebocador / reboque</option><option value="passenger">Passageiros</option><option value="sailing">Veleiro</option><option value="pleasure">Recreio</option><option value="other">Outros</option><option value="unknown">Não informado</option></select></label>
       <label>Consulta complementar<select id="status"><option value="">Todos os resultados</option><option value="pending">Pendente</option><option value="running">Consultando</option><option value="matched">Encontrado</option><option value="not_found">Não encontrado</option><option value="ambiguous">Correspondência ambígua</option><option value="error">Falha / nova tentativa</option></select></label>
+      <label>Origem do cadastro<select id="origin"><option value="">Todas as origens</option><option value="aisstream">AISStream</option><option value="antaq">Com dados ANTAQ</option><option value="linked">AIS + ANTAQ vinculados</option><option value="unlinked">ANTAQ aguardando vínculo / revisão</option></select></label>
       <button>Buscar</button>
     </form>
     <p id="summary" role="status">Carregando cadastro…</p>
@@ -35,6 +37,16 @@
         <label>Observações<textarea id="notes" maxlength="2000"></textarea></label>
         <p id="edit-status" role="status"></p>
         <div><button type="button" id="cancel">Cancelar</button><button id="save">Salvar cadastro</button></div>
+      </form>
+    </dialog>
+    <dialog id="antaq-importer" aria-labelledby="antaq-title">
+      <form id="antaq-form">
+        <h2 id="antaq-title">Importar cadastro ANTAQ</h2>
+        <p>Selecione a exportação oficial em CSV, XLSX ou tabela HTML. O cruzamento usa IMO/MMSI exatos; nomes iguais não são unidos automaticamente.</p>
+        <label>Arquivo da ANTAQ (até 16 MB)<input id="antaq-file" type="file" accept=".csv,.xlsx,.html,.htm,.xls,.txt" required></label>
+        <label>URL oficial de origem<input id="antaq-url" type="url" value="https://www.gov.br/antaq/pt-br/assuntos/navegacao/maritima-de-de-apoio/frota" required></label>
+        <p id="antaq-result" role="status">Confira a prévia antes de gravar. O cadastro ANTAQ não fornece posições para o mapa.</p>
+        <div class="registry-header-actions"><button type="button" id="antaq-cancel">Cancelar</button><button type="submit" id="antaq-preview">Conferir prévia</button><button type="button" id="antaq-apply" disabled>Importar e cruzar</button></div>
       </form>
     </dialog>
   </main>
