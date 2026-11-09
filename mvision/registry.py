@@ -92,7 +92,7 @@ class VesselRegistry:
         self.record_sources(row, {k: item[k] for k in ('name', 'imo', 'callsign', 'type', 'length', 'width', 'destination')
                                   if item.get(k) not in (None, '')}, 'AISStream', item.get('collected_at'))
         if changed or not existing:
-            self.antaq.reconcile(row)
+            self.antaq.reconcile(row, previous_imo=previous.split(':', 1)[1])
 
     def list(self, query='', category='', status='', limit=100, offset=0, origin=''):
         with self.lock:

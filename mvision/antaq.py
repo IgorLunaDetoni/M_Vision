@@ -245,7 +245,7 @@ class AntaqRegistry:
             self.db.execute(f"CREATE INDEX IF NOT EXISTS antaq_{key} ON antaq_vessels(json_extract(payload, '$.{key}'))")
         self.db.execute('CREATE INDEX IF NOT EXISTS antaq_link ON antaq_vessels(matched_mmsi)')
 
-    def reconcile(self, changed=None):
+    def reconcile(self, changed=None, previous_imo=''):
         from mvision.registry import signature
         if not self.db.execute('SELECT 1 FROM antaq_vessels LIMIT 1').fetchone():
             return
@@ -257,8 +257,8 @@ class AntaqRegistry:
                     index[key][vessel[key]].append(vessel)
         sql, params = 'SELECT * FROM antaq_vessels', []
         if changed:
-            sql += " WHERE matched_mmsi=? OR json_extract(payload,'$.mmsi')=? OR json_extract(payload,'$.imo')=?"
-            params = [changed['mmsi'], changed['mmsi'], changed.get('imo') or '__none__']
+            sql += " WHERE matched_mmsi=? OR json_extract(payload,'$.mmsi')=? OR json_extract(payload,'$.imo') IN (?,?)"
+            params = [changed['mmsi'], changed['mmsi'], changed.get('imo') or '__none__', previous_imo or '__none__']
         for record in self.db.execute(sql, params).fetchall():
             row = json.loads(record['payload'])
             status, vessel, reason = match_record(row, index)
@@ -298,17 +298,7 @@ class AntaqRegistry:
                     key = next((f'{k}:{row[k]}' for k in ('imo', 'registration', 'mmsi', 'antaq_id') if row.get(k)
                                 and k not in row['identifier_issues']), None)
                     key = key or 'row:' + hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()
-                    if key in seen:
-                        report['duplicates_in_file'] += 1
-                    seen.add(key)
-                    payload = json.dumps(row, ensure_ascii=False, sort_keys=True)
                     existing = self.db.execute('SELECT payload FROM antaq_vessels WHERE id=?', (key,)).fetchone()
-                    if existing:
-                        previous = json.loads(existing['payload'])
-                        if any(row.get(k) and previous.get(k) and row[k] != previous[k] for k in ('imo','mmsi','registration')):
-                            row['source_conflicts'] = {k: sorted({str(row.get(k) or ''), str(previous.get(k) or '')})
-                                                       for k in ('imo','mmsi','registration') if row.get(k) != previous.get(k)}
-                            payload = json.dumps(row, ensure_ascii=False, sort_keys=True)
                     # A later export may add IMO to a record previously identified by registration.
                     if not existing:
                         keys = [k for k in ('registration','antaq_id','mmsi') if row.get(k)]
@@ -317,8 +307,23 @@ class AntaqRegistry:
                             [row[k] for k in keys]).fetchall() if keys else []
                         if len(same) == 1:
                             previous = json.loads(same[0]['payload'])
-                            if not any(row.get(k) and previous.get(k) and row[k] != previous[k] for k in ('imo','mmsi')):
-                                key, existing = same[0]['id'], same[0]
+                            if any(row.get(k) and previous.get(k) and row[k] != previous[k] for k in ('imo','mmsi')):
+                                raise ValueError('A mesma inscrição/código possui IMO ou MMSI incompatível. Revise o arquivo antes de importar.')
+                            key, existing = same[0]['id'], same[0]
+                        elif len(same) > 1:
+                            raise ValueError('Identificadores do arquivo apontam para vários cadastros ANTAQ. Revise antes de importar.')
+                    if key in seen:
+                        report['duplicates_in_file'] += 1
+                    if existing:
+                        previous = json.loads(existing['payload'])
+                        if any(row.get(k) and previous.get(k) and row[k] != previous[k] for k in ('imo','mmsi','registration')):
+                            raise ValueError('Há identificadores incompatíveis para a mesma embarcação ANTAQ. Revise antes de importar.')
+                        if key in seen:
+                            for field in ('operator','navigation','authorization_status'):
+                                if previous.get(field) and row.get(field) and previous[field] != row[field]:
+                                    row[field] = '; '.join(sorted(set(previous[field].split('; ')+row[field].split('; '))))
+                    seen.add(key)
+                    payload = json.dumps(row, ensure_ascii=False, sort_keys=True)
                     report['created' if not existing else 'unchanged' if existing['payload'] == payload else 'updated'] += 1
                     self.db.execute('''INSERT INTO antaq_vessels VALUES (?,?,'unmatched',NULL,NULL,'',?,?)
                         ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, imported_at=excluded.imported_at,
@@ -389,11 +394,11 @@ def main():
         db.row_factory = sqlite3.Row
         registry = VesselRegistry(db, threading.RLock())
         raw = args.file.read_bytes()
-        report = registry.antaq.import_file(raw, args.file.name, args.source_url, commit=args.apply)
         if args.apply:
             target = Path(args.database).parent/'brutos'/'antaq'/'importacoes'
             target.mkdir(parents=True, exist_ok=True)
             (target/(hashlib.sha256(raw).hexdigest()+args.file.suffix.lower())).write_bytes(raw)
+        report = registry.antaq.import_file(raw, args.file.name, args.source_url, commit=args.apply)
         print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
