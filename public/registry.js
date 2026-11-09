@@ -31,6 +31,15 @@ async function diagnostics(){
 }
 
 function field(v,key){const manual=v.manual?.[key];return `${escape(manual||v.resolved?.[key]||v.enrichment?.[key]||"Não informado")}${manual?'<small>Preenchimento manual</small>':''}`;}
+function registryRow(v){
+  const r=v.resolved||v,standalone=v.origin==='antaq';
+  return `<tr><td><strong>${escape(r.name)}</strong><small>MMSI ${escape(v.mmsi)}</small><small>IMO ${escape(r.imo)}</small><small>Indicativo ${escape(r.callsign)}</small><small>${standalone?'Cadastro ANTAQ · sem posição AIS':v.antaq?'AISStream + ANTAQ':'AISStream'}</small></td>
+  <td>${escape(types[v.type]||'Não informado')}</td><td>${field(v,'model')}</td><td>${field(v,'manufacturer')}</td><td>${field(v,'vessel_class')}</td>
+  <td>Comprimento: ${escape(r.length)} m<br>Largura: ${escape(r.width)} m<br>Destino: ${escape(v.destination)}<small>${standalone?'Sem telemetria associada':'Última coleta AIS: '+escape(date(v.last_seen))}</small></td>
+  <td>${escape(r.country||'País não informado')}<small>${escape(v.enrichment?.source||'')}</small>${sourceLink(v.enrichment?.source_url)}${particulars(v)}${v.manual?.source_url?'<small>Fonte manual: '+sourceLink(v.manual.source_url)+'</small>':''}<small>${escape(v.manual?.notes||'')}</small></td>
+  <td><span class="badge">${escape(statuses[v.crawl_status]||v.crawl_status)}</span><small>${escape(date(v.checked_at))}</small><small>${escape(v.error||'')}</small>${v.enrichment?.matched_by?'<small>Wikidata por '+escape(v.enrichment.matched_by.toUpperCase())+'</small>':''}</td>
+  <td>${standalone?'<small>Aguardando identificação no AIS</small>':`<button data-edit="${escape(v.mmsi)}">Editar</button>`}</td></tr>`;
+}
 async function load(){
   const ticket=++sequence;
   try{
@@ -40,7 +49,7 @@ async function load(){
     const data=await response.json();if(ticket!==sequence)return;
     rows=data.vessels;total=data.total;
     if(offset>=total&&offset>0){offset=Math.max(0,Math.floor((total-1)/100)*100);return load();}
-    $('rows').innerHTML=rows.map(v=>`<tr><td><strong>${escape(v.name)}</strong><small>MMSI ${escape(v.mmsi)}</small><small>IMO ${escape(v.imo)}</small><small>Indicativo ${escape(v.callsign)}</small></td><td>${escape(types[v.type]||'Não informado')}</td><td>${field(v,'model')}</td><td>${field(v,'manufacturer')}</td><td>${field(v,'vessel_class')}</td><td>Comprimento: ${escape(v.length)} m<br>Largura: ${escape(v.width)} m<br>Destino: ${escape(v.destination)}<small>Última coleta AIS: ${escape(date(v.last_seen))}</small></td><td>${escape(v.enrichment?.country||'País não informado')}<small>${escape(v.enrichment?.source||'Sem dados públicos associados')}</small>${sourceLink(v.enrichment?.source_url)}${particulars(v)}${v.manual?.source_url?'<small>Fonte manual: '+sourceLink(v.manual.source_url)+'</small>':''}<small>${escape(v.manual?.notes||'')}</small></td><td><span class="badge">${escape(statuses[v.crawl_status]||v.crawl_status)}</span><small>${escape(date(v.checked_at))}</small><small>${escape(v.error||'')}</small>${v.enrichment?.matched_by?'<small>Identificado por '+escape(v.enrichment.matched_by.toUpperCase())+'</small>':''}</td><td><button data-edit="${escape(v.mmsi)}">Editar</button></td></tr>`).join('')||'<tr><td colspan="9">Nenhuma embarcação cadastrada nesta consulta. O cadastro é preenchido pela coleta AIS real.</td></tr>';
+    $('rows').innerHTML=rows.map(registryRow).join('')||'<tr><td colspan="9">Nenhuma embarcação cadastrada nesta consulta.</td></tr>';
     $('summary').textContent=`${total.toLocaleString('pt-BR')} embarcações nesta consulta. Cadastro persistente no computador.`;
     $('page').textContent=`Página ${Math.floor(offset/100)+1} de ${Math.max(1,Math.ceil(total/100))}`;
     $('previous').disabled=offset===0;$('next').disabled=offset+100>=total;
@@ -68,4 +77,33 @@ $('edit-form').addEventListener('submit',async event=>{
     $('editor').close();await load();
   }catch(error){$('edit-status').textContent=error.message;}finally{$('save').disabled=false;}
 });
+let antaqDraft=null,antaqVersion=0;
+function invalidateImport(){antaqDraft=null;antaqVersion++;$('antaq-apply').disabled=true;$('antaq-result').textContent='Confira a prévia antes de gravar.';}
+$('import-antaq').addEventListener('click',()=>{$('antaq-importer').showModal();});
+$('antaq-cancel').addEventListener('click',()=>$('antaq-importer').close());
+$('antaq-file').addEventListener('change',invalidateImport);
+$('antaq-url').addEventListener('input',invalidateImport);
+function fileContent(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(Error('Não foi possível ler o arquivo.'));reader.readAsDataURL(file);});}
+async function runAntaqImport(commit){
+  const version=antaqVersion;$('antaq-preview').disabled=true;$('antaq-apply').disabled=true;
+  try{
+    let draft=antaqDraft;
+    if(!commit){
+      const file=$('antaq-file').files[0];if(!file)throw Error('Selecione a exportação da ANTAQ.');
+      if(file.size>16*1024*1024)throw Error('Use um arquivo de até 16 MB.');
+      draft={filename:file.name,content:await fileContent(file),source_url:$('antaq-url').value};
+    }
+    if(!draft||version!==antaqVersion)return;
+    $('antaq-result').textContent=commit?'Importando e cruzando identificadores…':'Analisando arquivo e conferindo vínculos…';
+    const response=await fetch('/api/registry/antaq/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...draft,commit}),signal:AbortSignal.timeout(120000)});
+    const report=await response.json();if(!response.ok)throw Error(report.error||'Não foi possível importar.');
+    if(version!==antaqVersion)return;
+    $('antaq-result').textContent=`${commit?'Importação concluída':'Prévia'}: ${report.input_rows} linhas · ${report.created} novos cadastros · ${report.updated} atualizados · ${report.duplicates_in_file} repetições no arquivo. ANTAQ na base: ${report.total}, sendo ${report.statuses.matched||0} vinculados e ${report.total-(report.statuses.matched||0)} aguardando vínculo/revisão. ${commit?'Arquivo original e fontes preservados.':'Nada foi gravado. Confira os totais antes de importar.'}`;
+    antaqDraft=commit?null:draft;$('antaq-apply').disabled=commit;
+    if(commit){offset=0;load();diagnostics();}
+  }catch(error){if(version===antaqVersion)$('antaq-result').textContent=error.message;}
+  finally{$('antaq-preview').disabled=false;}
+}
+$('antaq-form').addEventListener('submit',event=>{event.preventDefault();runAntaqImport(false);});
+$('antaq-apply').addEventListener('click',()=>runAntaqImport(true));
 load();diagnostics();setInterval(()=>{load();diagnostics();},50000);
