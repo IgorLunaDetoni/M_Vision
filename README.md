@@ -116,6 +116,12 @@ $env:AIRCRAFT_SOURCE = 'disabled'
 
 ## APIs locais e limites
 
+### Cadastro ANTAQ e cruzamento com AIS
+
+Em **Cadastro de embarcações → Importar ANTAQ**, selecione uma exportação CSV, XLSX ou HTML oficial, confira a prévia e importe. O cruzamento usa IMO/MMSI exatos e compatíveis; registros vinculados complementam a linha AIS existente. Nomes iguais não são unidos automaticamente. Reimportações não acrescentam uma cópia do cadastro, e conflitos ficam indicados para revisão. As edições manuais, os arquivos originais e as fontes por campo são preservados. A demonstração não recebe registros reais por esse fluxo.
+
+A importação está implementada; a carga real depende de uma exportação da ANTAQ, ainda não obtida devido à indisponibilidade de acesso ao portal neste ambiente. Esses arquivos acrescentam dados cadastrais, sem criar coordenadas ou trajetórias. Veja formatos, regras de associação, APIs e comandos em [Integração ANTAQ](docs/antaq-integration.md).
+
 ### Cadastro local e coleta de informações complementares
 
 Abra **Cadastro de embarcações** no topo do mapa, ou `/registry.html`. A tabela inclui nome, MMSI, IMO, tipo AIS, indicativo, dimensões, destino, modelo comercial, fabricante/estaleiro, classe/projeto, país de registro informado pelo Wikidata, observações e fontes. Há busca, filtros por tipo/resultado da consulta e páginas de 100 registros. A tela atualiza a cada 50 segundos. O botão **Editar** permite adicionar modelo e informações verificadas, com URL da fonte; valores manuais têm prioridade de exibição e são preservados pelo coletor.

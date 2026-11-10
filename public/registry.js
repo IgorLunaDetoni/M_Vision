@@ -24,7 +24,7 @@ async function diagnostics(){
     const response=await fetch('/api/registry/diagnostics',{signal:AbortSignal.timeout(15000)});
     if(!response.ok)throw Error('Não foi possível carregar o diagnóstico.');
     const d=await response.json();
-    $('diagnostics').innerHTML=`<summary>Diagnóstico da coleta AIS: ${d.total} embarcações</summary><p>Consultadas: ${d.checked}. Com dados Wikidata/manuais: ${d.with_external_data}. Atualizado: ${escape(date(d.generated_at))}.</p><p>${Object.entries(d.statuses).map(([k,n])=>`${escape(statuses[k]||k)}: ${n}`).join(' · ')}</p><table><thead><tr><th>Campo</th><th>Preenchidos</th><th>Ausentes</th><th>Cobertura</th></tr></thead><tbody>${Object.entries(d.coverage).map(([k,c])=>`<tr><td>${escape(labels[k]||k)}</td><td>${c.filled}</td><td>${c.missing}</td><td>${c.percent}%</td></tr>`).join('')}</tbody></table>`;
+    $('diagnostics').innerHTML=`<summary>Diagnóstico da coleta AIS: ${d.total} embarcações</summary><p>Consultadas: ${d.checked}. Com dados Wikidata: ${d.with_external_data}. Atualizado: ${escape(date(d.generated_at))}.</p><p>${Object.entries(d.statuses).map(([k,n])=>`${escape(statuses[k]||k)}: ${n}`).join(' · ')}</p><table><thead><tr><th>Campo</th><th>Preenchidos</th><th>Ausentes</th><th>Cobertura</th></tr></thead><tbody>${Object.entries(d.coverage).map(([k,c])=>`<tr><td>${escape(labels[k]||k)}</td><td>${c.filled}</td><td>${c.missing}</td><td>${c.percent}%</td></tr>`).join('')}</tbody></table>`;
     const a=d.antaq;
     if(a)$('antaq-summary').textContent=`ANTAQ: ${a.total} cadastros importados · ${a.statuses.matched||0} vinculados sem duplicar a linha AIS · ${a.total-(a.statuses.matched||0)} aguardando vínculo/revisão. Última importação: ${date(a.last_imported_at)}.`;
   }catch(error){$('diagnostics').textContent=error.message;}
@@ -77,7 +77,7 @@ $('edit-form').addEventListener('submit',async event=>{
     $('editor').close();await load();
   }catch(error){$('edit-status').textContent=error.message;}finally{$('save').disabled=false;}
 });
-let antaqDraft=null,antaqVersion=0;
+let antaqDraft=null,antaqVersion=0,antaqBusy=false;
 function invalidateImport(){antaqDraft=null;antaqVersion++;$('antaq-apply').disabled=true;$('antaq-result').textContent='Confira a prévia antes de gravar.';}
 $('import-antaq').addEventListener('click',()=>{$('antaq-importer').showModal();});
 $('antaq-cancel').addEventListener('click',()=>$('antaq-importer').close());
@@ -85,6 +85,8 @@ $('antaq-file').addEventListener('change',invalidateImport);
 $('antaq-url').addEventListener('input',invalidateImport);
 function fileContent(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(Error('Não foi possível ler o arquivo.'));reader.readAsDataURL(file);});}
 async function runAntaqImport(commit){
+  if(antaqBusy)return;
+  antaqBusy=true;$('antaq-file').disabled=true;$('antaq-url').disabled=true;
   const version=antaqVersion;$('antaq-preview').disabled=true;$('antaq-apply').disabled=true;
   try{
     let draft=antaqDraft;
@@ -102,7 +104,7 @@ async function runAntaqImport(commit){
     antaqDraft=commit?null:draft;$('antaq-apply').disabled=commit;
     if(commit){offset=0;load();diagnostics();}
   }catch(error){if(version===antaqVersion)$('antaq-result').textContent=error.message;}
-  finally{$('antaq-preview').disabled=false;}
+  finally{antaqBusy=false;$('antaq-preview').disabled=false;$('antaq-file').disabled=false;$('antaq-url').disabled=false;}
 }
 $('antaq-form').addEventListener('submit',event=>{event.preventDefault();runAntaqImport(false);});
 $('antaq-apply').addEventListener('click',()=>runAntaqImport(true));

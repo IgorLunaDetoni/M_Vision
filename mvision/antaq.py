@@ -121,10 +121,11 @@ def xlsx_tables(raw):
                         raise ValueError('Planilha contém colunas demais.')
                     cells.extend([''] * max(0, column-len(cells)))
                     # Never interpret a formula as an identifier, even with a cached value.
-                    value = '' if cell.find('s:f', ns) is not None else cell.findtext('s:v', '', ns)
-                    if cell.get('t') == 's' and value:
+                    formula = cell.find('s:f', ns) is not None
+                    value = '' if formula else cell.findtext('s:v', '', ns)
+                    if not formula and cell.get('t') == 's' and value:
                         value = strings[int(value)]
-                    elif cell.get('t') == 'inlineStr':
+                    elif not formula and cell.get('t') == 'inlineStr':
                         value = ''.join(t.text or '' for t in cell.findall('.//s:t', ns))
                     cells[column-1] = value
                 rows.append(cells)
@@ -144,7 +145,8 @@ def parse_export(raw, filename):
         if raw.startswith(bytes.fromhex('d0cf11e0')):
             raise ValueError('Salve o arquivo XLS antigo como CSV ou XLSX antes de importar.')
         text = None
-        for encoding in ('utf-8-sig', 'utf-16', 'cp1252'):
+        encodings = ('utf-16',) if raw.startswith((b'\xff\xfe', b'\xfe\xff')) else ('utf-8-sig', 'cp1252')
+        for encoding in encodings:
             try:
                 text = raw.decode(encoding)
                 break
@@ -241,6 +243,8 @@ class AntaqRegistry:
         self.db.execute('''CREATE TABLE IF NOT EXISTS antaq_imports (
             sha256 TEXT PRIMARY KEY, filename TEXT NOT NULL, source_url TEXT NOT NULL,
             imported_at TEXT NOT NULL, report TEXT NOT NULL)''')
+        if 'identity_anchor' not in {r[1] for r in self.db.execute('PRAGMA table_info(antaq_vessels)')}:
+            self.db.execute('ALTER TABLE antaq_vessels ADD COLUMN identity_anchor TEXT')
         for key in ('imo', 'mmsi', 'registration', 'antaq_id'):
             self.db.execute(f"CREATE INDEX IF NOT EXISTS antaq_{key} ON antaq_vessels(json_extract(payload, '$.{key}'))")
         self.db.execute('CREATE INDEX IF NOT EXISTS antaq_link ON antaq_vessels(matched_mmsi)')
@@ -262,10 +266,15 @@ class AntaqRegistry:
         for record in self.db.execute(sql, params).fetchall():
             row = json.loads(record['payload'])
             status, vessel, reason = match_record(row, index)
+            anchor = record['identity_anchor']
+            if vessel and anchor and anchor.split(':',1)[1] and not row.get('imo') and signature(vessel) != anchor:
+                status, vessel, reason = 'conflict', None, 'A identidade IMO do MMSI mudou após o vínculo; revisar o cadastro ANTAQ.'
             identity = signature(vessel) if vessel else None
             self.db.execute('UPDATE antaq_vessels SET match_status=?, matched_mmsi=?, matched_identity=?, matched_by=? WHERE id=?',
                             (status, vessel['mmsi'] if vessel else None, identity, reason, record['id']))
             if vessel:
+                if not anchor or not anchor.split(':',1)[1] or row.get('imo'):
+                    self.db.execute('UPDATE antaq_vessels SET identity_anchor=? WHERE id=?', (identity,record['id']))
                 evidence = {key: value for key, value in row.items() if key in ALIASES and value}
                 evidence['source_url'] = record['source_url']
                 evidence['field_sources'] = {key: [dict(value=str(value), source_url=record['source_url'],
@@ -319,13 +328,19 @@ class AntaqRegistry:
                         if any(row.get(k) and previous.get(k) and row[k] != previous[k] for k in ('imo','mmsi','registration')):
                             raise ValueError('Há identificadores incompatíveis para a mesma embarcação ANTAQ. Revise antes de importar.')
                         if key in seen:
+                            # Repeated rows in one export can provide complementary fields.
+                            for field in ALIASES:
+                                if not row.get(field) and previous.get(field):
+                                    row[field] = previous[field]
                             for field in ('operator','navigation','authorization_status'):
                                 if previous.get(field) and row.get(field) and previous[field] != row[field]:
                                     row[field] = '; '.join(sorted(set(previous[field].split('; ')+row[field].split('; '))))
                     seen.add(key)
                     payload = json.dumps(row, ensure_ascii=False, sort_keys=True)
                     report['created' if not existing else 'unchanged' if existing['payload'] == payload else 'updated'] += 1
-                    self.db.execute('''INSERT INTO antaq_vessels VALUES (?,?,'unmatched',NULL,NULL,'',?,?)
+                    self.db.execute('''INSERT INTO antaq_vessels
+                        (id,payload,match_status,matched_mmsi,matched_identity,matched_by,imported_at,source_url)
+                        VALUES (?,?,'unmatched',NULL,NULL,'',?,?)
                         ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, imported_at=excluded.imported_at,
                         source_url=excluded.source_url''', (key, payload, imported_at, source_url))
                 self.reconcile()
@@ -390,6 +405,10 @@ def main():
     args = parser.parse_args()
     if not Path(args.database).is_file():
         parser.error('Inicie o aplicativo para criar o cadastro primeiro.')
+    if not args.file.is_file():
+        parser.error('Arquivo de exportação não encontrado.')
+    if args.file.stat().st_size > MAX_FILE:
+        parser.error('Use um arquivo de até 16 MB.')
     with sqlite3.connect(args.database, timeout=30) as db:
         db.row_factory = sqlite3.Row
         registry = VesselRegistry(db, threading.RLock())

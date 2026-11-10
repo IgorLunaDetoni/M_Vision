@@ -88,6 +88,17 @@ class AntaqTests(unittest.TestCase):
         self.assertEqual(self.store.registry.list()[1],3)
         self.assertEqual(self.store.registry.list(origin='linked')[1],0)
 
+    def test_repeated_export_rows_complement_fields_and_keep_operators(self):
+        self.ais()
+        self.apply([['OFFICIAL','9321483','','001111','Operator A','Public yard','125,5'],
+                    ['OFFICIAL','9321483','','','Operator B','','']])
+        items,total = self.store.registry.list()
+        self.assertEqual(total,1)
+        self.assertEqual(items[0]['resolved']['manufacturer'],'Public yard')
+        self.assertEqual(items[0]['resolved']['length'],'125.5')
+        self.assertEqual(items[0]['resolved']['operator'],'Operator A; Operator B')
+        self.assertEqual(items[0]['resolved']['registration'],'001111')
+
     def test_ambiguous_imo_reconciles_when_one_ais_identity_changes(self):
         self.ais()
         self.ais('223456789','9321483')
@@ -121,6 +132,21 @@ class AntaqTests(unittest.TestCase):
         self.assertEqual(report['statuses']['conflict'],1)
         self.assertEqual(self.store.registry.list(origin='linked')[1],0)
 
+    def test_mmsi_only_record_does_not_follow_a_reused_ais_identity(self):
+        self.ais()
+        self.apply([['OFFICIAL','','123456789','001111','','Public yard','']])
+        self.assertEqual(self.store.registry.list(origin='linked')[1],1)
+        self.ais(imo='9876543')
+        self.assertEqual(self.store.registry.list(origin='linked')[1],0)
+        self.assertEqual(self.store.registry.antaq.summary()['statuses']['conflict'],1)
+        self.store.registry.antaq.reconcile()
+        self.store.db.commit()
+        self.store.close()
+        self.store = VesselStore(self.path)
+        self.assertEqual(self.store.registry.antaq.summary()['statuses']['conflict'],1)
+        current = self.store.registry.list(origin='aisstream')[0][0]
+        self.assertNotIn('manufacturer',current['resolved'])
+
     def test_api_preview_apply_origin_guard_and_raw_export(self):
         self.ais()
         raw = export([['OFFICIAL','9321483','','001111','Operator','','']])
@@ -146,6 +172,24 @@ class AntaqTests(unittest.TestCase):
         finally:
             server.shutdown();server.server_close();thread.join()
 
+    def test_demo_server_cannot_receive_real_antaq_records(self):
+        server = create_server(port=0,source='demo',store=self.store)
+        thread = threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        base = f'http://127.0.0.1:{server.server_port}'
+        body = dict(filename='frota.csv',commit=True,source_url=DEFAULT_SOURCE,
+                    content=base64.b64encode(export([['OFFICIAL','9321483','','001111','','','']])).decode())
+        try:
+            request = Request(base+'/api/registry/antaq/import',json.dumps(body).encode(),
+                              {'Content-Type':'application/json','Origin':base})
+            with self.assertRaises(HTTPError) as result:
+                urlopen(request)
+            self.assertEqual(result.exception.code,400)
+            self.assertEqual(self.store.registry.antaq.summary()['total'],0)
+            self.assertFalse((self.store.root/'brutos'/'antaq').exists())
+        finally:
+            server.shutdown();server.server_close();thread.join()
+
 
 class ExportParsingTests(unittest.TestCase):
     def test_csv_and_html_preserve_identifiers_and_normalize_decimal_comma(self):
@@ -157,6 +201,8 @@ class ExportParsingTests(unittest.TestCase):
         self.assertEqual(item['length'],'125.5')
         html = b'<table><tr><th>Nome</th><th>IMO</th></tr><tr><td>VESSEL</td><td>9321483</td></tr></table>'
         self.assertEqual(parse_export(html,'x.xls')[0]['imo'],'9321483')
+        cp1252 = 'Nome da Embarcação;Inscrição\nLANCHA AÇÃO;001-234'.encode('cp1252')
+        self.assertEqual(parse_export(cp1252,'x.csv')[0]['name'],'LANCHA AÇÃO')
 
     def test_xlsx_text_identifiers_and_formulas_are_not_evaluated(self):
         root = ET.Element('worksheet',xmlns='http://schemas.openxmlformats.org/spreadsheetml/2006/main')
@@ -166,10 +212,17 @@ class ExportParsingTests(unittest.TestCase):
             for col,value in zip('ABC',values):
                 cell = ET.SubElement(row,'c',r=col+str(number),t='inlineStr')
                 ET.SubElement(ET.SubElement(cell,'is'),'t').text=value
+        row = ET.SubElement(data,'row',r='3')
+        cell = ET.SubElement(row,'c',r='A3',t='inlineStr')
+        ET.SubElement(ET.SubElement(cell,'is'),'t').text='FORMULA'
+        cell = ET.SubElement(row,'c',r='C3')
+        ET.SubElement(cell,'f').text='123456789'
+        ET.SubElement(cell,'v').text='123456789'
         out = io.BytesIO()
         with ZipFile(out,'w') as archive:
             archive.writestr('xl/worksheets/sheet1.xml',ET.tostring(root))
         self.assertEqual(parse_export(out.getvalue(),'x.xlsx')[0]['mmsi'],'012345678')
+        self.assertNotIn('mmsi',parse_export(out.getvalue(),'x.xlsx')[1])
 
     def test_non_vessel_file_and_invalid_imo(self):
         self.assertTrue(valid_imo('9321483'))

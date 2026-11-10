@@ -96,7 +96,11 @@ def create_server(port=8000, source="demo", store=None, interval=300):
                 if not 0 < length <= (24*1024*1024 if importing else 16000):
                     raise ValueError('Tamanho inválido.')
                 body = json.loads(self.rfile.read(length))
+                if not isinstance(body, dict):
+                    raise ValueError('Corpo JSON inválido.')
                 if importing:
+                    if source == 'demo':
+                        raise ValueError('Use a base real: inicie com VESSEL_SOURCE=aisstream ou disabled para importar a ANTAQ.')
                     filename = body.get('filename')
                     if not isinstance(filename, str) or len(filename) > 300:
                         raise ValueError('Nome de arquivo inválido.')
