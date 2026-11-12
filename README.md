@@ -68,7 +68,19 @@ O filtro de porte separa pequeno (`compact`, comprimento > 0 e < 50 m), médio (
 
 No mapa, **Verificar dados desta área** consulta todas as embarcações com posição no trecho visível, sem os filtros da lista e sem o limite de marcadores. Mostra totais, posições de até 15 minutos/24 horas, porte médio e comprimento ausente. No histórico, as idades são relativas ao horário consultado. Também informa quando a região visível não está integralmente contida em uma das caixas da assinatura configurada. Isso não mede a disponibilidade dos receptores do fornecedor: um porto vazio no mapa significa ausência de posições recebidas/armazenadas nessa área, não ausência de embarcações. A API correspondente é `GET /api/coverage?bounds=sul,oeste,norte,leste`, com `at` opcional.
 
-Com as dependências instaladas, execute `.\start-aisstream.ps1` para iniciar a fonte real. O iniciador solicita a chave com entrada oculta, sem gravá-la em arquivo. Crie sua chave na conta do [AISStream](https://aisstream.io/); conectar o Git no VS Code não configura essa credencial. Acesse `http://127.0.0.1:8000` após iniciar.
+Com as dependências instaladas, execute `.\start-aisstream.ps1` para iniciar a fonte real. Na primeira execução, o iniciador solicita a chave com entrada oculta e a salva no **Gerenciador de Credenciais do Windows**, no destino `M_Vision/AISStream`. Nas próximas execuções, usa a chave salva automaticamente. O segredo fica fora dos arquivos do projeto e do Git. Crie sua chave na conta do [AISStream](https://aisstream.io/); conectar o Git no VS Code não configura essa credencial. Acesse `http://127.0.0.1:8000` após iniciar.
+
+Para cadastrar ou trocar a chave sem iniciar o app:
+
+```powershell
+.\save-aisstream-key.ps1
+```
+
+O comando pede o segredo com entrada oculta, sem incluí-lo no histórico de comandos. Para verificar somente se há uma chave salva, use `.\save-aisstream-key.ps1 -Status`. Para remover a chave local, use `.\save-aisstream-key.ps1 -Remove`. A remoção local não revoga a chave na conta AISStream.
+
+A credencial pertence ao usuário atual do Windows e permanece neste computador, inclusive entre reinicializações. O armazenamento usa `CredWriteW`/`CredReadW` nativos, sem dependências extras ou arquivo `.env` com o segredo. Aplicativos executados com a mesma conta do Windows podem acessar suas credenciais: esse mecanismo protege o armazenamento local, não substitui a proteção da conta/computador. Durante a execução, a chave é passada ao processo do servidor pelo ambiente; o iniciador restaura o ambiente anterior ao encerrar. Se `AISSTREAM_API_KEY` já estiver definida na sessão, ela tem prioridade e não substitui automaticamente a credencial salva. [Referência da Microsoft](https://learn.microsoft.com/en-us/windows/win32/api/wincred/ns-wincred-credentialw).
+
+O `.gitignore` também exclui `.env` e suas variantes locais (preservando `.env.example`), pastas `secrets/` e `credentials/`, além de arquivos `*.secret` e `*.credentials.xml`. O Gerenciador de Credenciais fica fora da árvore do repositório.
 
 O adaptador está implementado, mas precisa de uma chave própria. Consulte a [documentação oficial](https://aisstream.io/documentation) para acesso, cobertura e limites. As condições de armazenamento e exportação devem ser confirmadas com o fornecedor. Nenhuma conta real foi conectada para validar esta entrega.
 

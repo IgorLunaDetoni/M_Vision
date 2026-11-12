@@ -2,6 +2,12 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
+secrets/
+credentials/
+*.secret
+*.credentials.xml
 data/
 *.log
 
