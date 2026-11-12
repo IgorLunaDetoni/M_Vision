@@ -4,6 +4,18 @@ Integrador local de embarcações e aeronaves, com mapa mundial, histórico cons
 
 ## Iniciar
 
+Para iniciar **M Vision + coleta AISStream** juntos, usando a chave salva no Windows:
+
+```powershell
+.\start-local.cmd
+```
+
+Também pode dar duplo clique em `start-local.cmd`. O iniciador usa o ambiente Python local disponível e chama `start-aisstream.ps1`, que recupera a credencial salva. Se ainda não houver chave, solicita o cadastro com entrada oculta. Se o terminal não aceitar colar a chave, cadastre antes com `.\save-aisstream-key.ps1 -Clipboard`. As dependências de `requirements.txt` precisam estar instaladas no ambiente usado.
+
+Abra **http://127.0.0.1:8000** (ou a porta definida em `PORT`). A coleta AISStream e o servidor rodam juntos enquanto essa janela estiver aberta; encerre com `Ctrl+C`. O servidor e os dados ficam no computador; a coleta AISStream precisa de internet. Em caso de erro, a janela permanece aberta para leitura da mensagem.
+
+Para iniciar a demonstração com a configuração padrão:
+
 ```powershell
 .\start.cmd
 ```
