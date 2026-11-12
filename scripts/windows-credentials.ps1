@@ -56,21 +56,30 @@ namespace MVision.Security {
 
         public static void Write(string target, SecureString secret) {
             ValidateTarget(target);
-            if (secret == null || secret.Length == 0 || secret.Length * 2 > MaxBlobBytes)
+            if (secret == null || secret.Length == 0)
                 throw new ArgumentException("Informe uma chave de 1 a 1280 caracteres.");
             IntPtr blob = Marshal.SecureStringToBSTR(secret);
             try {
-                for (int i = 0; i < secret.Length; i++) {
+                int start = 0;
+                int end = secret.Length;
+                while (start < end && char.IsWhiteSpace((char)(ushort)Marshal.ReadInt16(blob, start * 2))) start++;
+                while (end > start && char.IsWhiteSpace((char)(ushort)Marshal.ReadInt16(blob, (end - 1) * 2))) end--;
+                int length = end - start;
+                if (length == 0 || length * 2 > MaxBlobBytes)
+                    throw new ArgumentException("Informe uma chave de 1 a 1280 caracteres. Cole somente o valor da chave.");
+                for (int i = start; i < end; i++) {
                     char c = (char)(ushort)Marshal.ReadInt16(blob, i * 2);
+                    if (c == '\u0016')
+                        throw new ArgumentException("O terminal recebeu Ctrl+V como caractere, em vez de colar a chave. Copie a chave e execute .\\save-aisstream-key.ps1 -Clipboard.");
                     if (char.IsWhiteSpace(c) || char.IsControl(c))
-                        throw new ArgumentException("A chave nao pode conter espacos ou caracteres de controle.");
+                        throw new ArgumentException("A chave contem espacos internos ou caracteres de controle. Copie somente o valor da chave, sem rotulos ou comandos.");
                 }
                 Credential credential = new Credential();
                 credential.Type = Generic;
                 credential.TargetName = target;
                 credential.Comment = "M Vision - AISStream API key";
-                credential.CredentialBlobSize = (UInt32)(secret.Length * 2);
-                credential.CredentialBlob = blob;
+                credential.CredentialBlobSize = (UInt32)(length * 2);
+                credential.CredentialBlob = IntPtr.Add(blob, start * 2);
                 credential.Persist = LocalMachine;
                 credential.UserName = "AISStream";
                 if (!CredWrite(ref credential, 0))
@@ -120,4 +129,33 @@ namespace MVision.Security {
     }
 }
 '@
+}
+
+function Read-MVisionApiKey {
+    param([string]$Prompt = 'Chave AISStream (entrada oculta)', [switch]$FromClipboard)
+    if ($FromClipboard) {
+        $clipboardText = $null
+        try {
+            $clipboardText = Get-Clipboard -Raw -ErrorAction Stop
+            if ([string]::IsNullOrWhiteSpace($clipboardText)) {
+                throw 'A area de transferencia esta vazia. Copie somente o valor da chave e tente novamente.'
+            }
+            return ConvertTo-SecureString -String $clipboardText -AsPlainText -Force
+        } finally {
+            $clipboardText = $null
+        }
+    }
+    $secret = Read-Host $Prompt -AsSecureString
+    $pointer = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+    try {
+        for ($i = 0; $i -lt $secret.Length; $i++) {
+            if ([System.Runtime.InteropServices.Marshal]::ReadInt16($pointer, $i * 2) -eq 22) {
+                $secret.Dispose()
+                throw 'O terminal recebeu Ctrl+V como caractere, em vez de colar a chave. Copie a chave e execute .\save-aisstream-key.ps1 -Clipboard.'
+            }
+        }
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    }
+    return $secret
 }

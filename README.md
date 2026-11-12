@@ -78,6 +78,10 @@ Para cadastrar ou trocar a chave sem iniciar o app:
 
 O comando pede o segredo com entrada oculta, sem incluí-lo no histórico de comandos. Para verificar somente se há uma chave salva, use `.\save-aisstream-key.ps1 -Status`. Para remover a chave local, use `.\save-aisstream-key.ps1 -Remove`. A remoção local não revoga a chave na conta AISStream.
 
+Cole somente o valor da chave, sem rótulos ou comandos. Espaços, tabulações e quebras de linha nas extremidades são removidos antes de salvar; espaços internos e caracteres de controle restantes são rejeitados sem alterar a credencial anterior.
+
+Se colar com `Ctrl+V` produzir erro de caractere de controle, copie a chave no painel AISStream e execute `.\save-aisstream-key.ps1 -Clipboard`. Essa opção lê a área de transferência local diretamente, sem mostrar a chave nem passá-la como argumento do comando. O comando não limpa a área de transferência; depois de salvar, copie outro texto para substituir a chave.
+
 A credencial pertence ao usuário atual do Windows e permanece neste computador, inclusive entre reinicializações. O armazenamento usa `CredWriteW`/`CredReadW` nativos, sem dependências extras ou arquivo `.env` com o segredo. Aplicativos executados com a mesma conta do Windows podem acessar suas credenciais: esse mecanismo protege o armazenamento local, não substitui a proteção da conta/computador. Durante a execução, a chave é passada ao processo do servidor pelo ambiente; o iniciador restaura o ambiente anterior ao encerrar. Se `AISSTREAM_API_KEY` já estiver definida na sessão, ela tem prioridade e não substitui automaticamente a credencial salva. [Referência da Microsoft](https://learn.microsoft.com/en-us/windows/win32/api/wincred/ns-wincred-credentialw).
 
 O `.gitignore` também exclui `.env` e suas variantes locais (preservando `.env.example`), pastas `secrets/` e `credentials/`, além de arquivos `*.secret` e `*.credentials.xml`. O Gerenciador de Credenciais fica fora da árvore do repositório.

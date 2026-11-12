@@ -1,5 +1,6 @@
 [CmdletBinding(DefaultParameterSetName='Save')]
 param(
+    [Parameter(ParameterSetName='Save')][switch]$Clipboard,
     [Parameter(ParameterSetName='Status')][switch]$Status,
     [Parameter(ParameterSetName='Remove')][switch]$Remove
 )
@@ -21,7 +22,7 @@ try {
         if ($removed) { Write-Host 'Chave AISStream removida do armazenamento local.' }
         else { Write-Host 'Nenhuma chave AISStream estava salva.' }
     } else {
-        $aisSecret = Read-Host 'Nova chave AISStream (entrada oculta)' -AsSecureString
+        $aisSecret = Read-MVisionApiKey -Prompt 'Nova chave AISStream (entrada oculta)' -FromClipboard:$Clipboard
         [MVision.Security.WindowsCredentialStore]::Write($credentialTarget, $aisSecret)
         Write-Host 'Chave salva no Gerenciador de Credenciais do Windows, fora do projeto e do Git.'
         Write-Host 'Para iniciar o M Vision: .\start-aisstream.ps1'

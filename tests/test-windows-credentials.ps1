@@ -38,16 +38,29 @@ try {
     $testSecret = ConvertTo-SecureString 'test-only-rotated-key' -AsPlainText -Force
     [MVision.Security.WindowsCredentialStore]::Write($testTarget, $testSecret)
     Assert-Secret ([MVision.Security.WindowsCredentialStore]::Read($testTarget)) 'test-only-rotated-key'
+    $testSecret.Dispose()
+    $testSecret = ConvertTo-SecureString (" `t`r`n" + 'test-only-trimmed-key' + "`r`n`t ") -AsPlainText -Force
+    [MVision.Security.WindowsCredentialStore]::Write($testTarget, $testSecret)
+    Assert-Secret ([MVision.Security.WindowsCredentialStore]::Read($testTarget)) 'test-only-trimmed-key'
+    foreach ($invalidValue in @(" `t`r`n", 'test only-key', "test`nonly-key", ('test'+[char]0+'key'), ([string][char]22))) {
+        $invalidSecret = ConvertTo-SecureString $invalidValue -AsPlainText -Force
+        $rejected = $false
+        try { [MVision.Security.WindowsCredentialStore]::Write($testTarget, $invalidSecret) }
+        catch { $rejected = $true }
+        finally { $invalidSecret.Dispose() }
+        if (-not $rejected) { throw 'Invalid key was not rejected.' }
+        Assert-Secret ([MVision.Security.WindowsCredentialStore]::Read($testTarget)) 'test-only-trimmed-key'
+    }
     $blank = New-Object System.Security.SecureString
     $rejected = $false
     try { [MVision.Security.WindowsCredentialStore]::Write($testTarget, $blank) }
     catch { $rejected = $true }
     finally { $blank.Dispose() }
     if (-not $rejected) { throw 'Empty key was not rejected.' }
-    Assert-Secret ([MVision.Security.WindowsCredentialStore]::Read($testTarget)) 'test-only-rotated-key'
+    Assert-Secret ([MVision.Security.WindowsCredentialStore]::Read($testTarget)) 'test-only-trimmed-key'
     if (-not [MVision.Security.WindowsCredentialStore]::Delete($testTarget)) { throw 'Test credential removal failed.' }
     if ($null -ne [MVision.Security.WindowsCredentialStore]::Read($testTarget)) { throw 'Test credential remains after removal.' }
-    Write-Host 'PASS: secure write, read, rotation, empty-key rejection and test-target cleanup.'
+    Write-Host 'PASS: secure write, read, rotation, whitespace trimming, invalid-key rejection and test-target cleanup.'
 } finally {
     if ($null -ne $testSecret) { $testSecret.Dispose() }
     [void][MVision.Security.WindowsCredentialStore]::Delete($testTarget)
